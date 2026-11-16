@@ -1,0 +1,77 @@
+# Xcode project for App Store builds, made with XcodeGen on a Mac (GitHub Actions does it, see
+# .github/workflows/ios.yml):  bash Tools/xcode-project.sh  ->  Xcode/Phomic.xcodeproj
+#
+# Day to day the app is built with xtool (Package.swift + xtool.yml). This project compiles the
+# same sources as a regular Xcode app with a widget extension, so Xcode adds what App Store
+# Connect wants: the icon in an asset catalog, App Intents metadata it generates itself, and
+# the Xcode/SDK build info. COpus and PhomicActivity come from the Swift package.
+name: Phomic
+options:
+  deploymentTarget:
+    iOS: "18.0"
+  createIntermediateGroups: true
+packages:
+  PhomicPackage:
+    path: ..
+settings:
+  base:
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1" # CI passes the run number
+    SWIFT_VERSION: "6.0"
+    TARGETED_DEVICE_FAMILY: "1" # iPhone (iPads run it as an iPhone app)
+    CODE_SIGN_STYLE: Automatic # CI switches to Manual with its own certificate
+targets:
+  PhomicApp:
+    type: application
+    platform: iOS
+    sources:
+      - path: ../Sources/Phomic
+      - path: ../Resources/PrivacyInfo.xcprivacy
+        buildPhase: resources
+      - path: Assets.xcassets # made by Tools/xcode-project.sh from Resources/AppIcon.png
+        buildPhase: resources
+    dependencies:
+      - target: PhomicWidgetExtension
+        embed: true
+      - package: PhomicPackage
+        product: COpus
+      - package: PhomicPackage
+        product: PhomicActivity
+    settings:
+      base:
+        PRODUCT_NAME: Phomic
+        PRODUCT_MODULE_NAME: PhomicApp # the package has a target named Phomic
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.nordohm.Phomic
+        INFOPLIST_FILE: $(SRCROOT)/../Phomic-Info.plist
+        GENERATE_INFOPLIST_FILE: YES # merged with Phomic-Info.plist
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.utilities
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: UIInterfaceOrientationPortrait
+        INFOPLIST_KEY_UIRequiresFullScreen: YES # portrait only, so no split screen
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        PROVISIONING_PROFILE_SPECIFIER: $(PHOMIC_APP_PROFILE) # set by CI
+  PhomicWidgetExtension:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: ../Sources/PhomicWidget
+    dependencies:
+      - package: PhomicPackage
+        product: PhomicActivity
+    settings:
+      base:
+        PRODUCT_NAME: PhomicWidget
+        PRODUCT_MODULE_NAME: PhomicWidgetExtension # the package has a target named PhomicWidget
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.nordohm.Phomic.PhomicWidget
+        INFOPLIST_FILE: $(SRCROOT)/../PhomicWidget-Info.plist
+        GENERATE_INFOPLIST_FILE: YES
+        SKIP_INSTALL: YES
+        PROVISIONING_PROFILE_SPECIFIER: $(PHOMIC_WIDGET_PROFILE) # set by CI
+schemes:
+  PhomicApp:
+    build:
+      targets:
+        PhomicApp: all
+    archive:
+      config: Release

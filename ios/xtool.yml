@@ -1,0 +1,15 @@
+version: 1
+bundleID: io.github.nordohm.Phomic
+product: Phomic
+infoPath: Phomic-Info.plist
+iconPath: Resources/AppIcon.png
+# App Intents metadata (made by Tools/appintents-metadata.sh): lets iOS run the
+# Live Activity's mute button. Both bundles contain the intent, so both get it.
+resources:
+  - Resources/Metadata.appintents
+  - Resources/PrivacyInfo.xcprivacy
+extensions:
+  - product: PhomicWidget
+    infoPath: PhomicWidget-Info.plist
+    resources:
+      - Resources/Metadata.appintents

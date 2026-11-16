@@ -1,0 +1,8 @@
+<Solution>
+  <Configurations>
+    <Platform Name="ARM64" />
+    <Platform Name="x64" />
+  </Configurations>
+  <Project Path="Phomic/Phomic.vcxproj" Id="5b1f3c2e-8a4d-4e7b-9c61-2d7e0f4a9b13" />
+  <Project Path="third_party/opus/opus.vcxproj" Id="7d3c1e52-90a4-4c3b-8f0e-2b6a5d41c9e7" />
+</Solution>

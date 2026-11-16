@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ApplicationDefinition Include="App.xaml" />
+  </ItemGroup>
+  <ItemGroup>
+    <Page Include="MainWindow.xaml" />
+  </ItemGroup>
+  <ItemGroup>
+    <Midl Include="MainWindow.idl" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="pch.cpp" />
+    <ClCompile Include="App.xaml.cpp" />
+    <ClCompile Include="MainWindow.xaml.cpp" />
+    <ClCompile Include="JitterBuffer.cpp">
+      <Filter>Engine</Filter>
+    </ClCompile>
+    <ClCompile Include="AudioOutput.cpp">
+      <Filter>Engine</Filter>
+    </ClCompile>
+    <ClCompile Include="StreamServer.cpp">
+      <Filter>Engine</Filter>
+    </ClCompile>
+    <ClCompile Include="Settings.cpp">
+      <Filter>Engine</Filter>
+    </ClCompile>
+    <ClCompile Include="Resampler.cpp">
+      <Filter>Engine</Filter>
+    </ClCompile>
+    <ClCompile Include="BluetoothReceiver.cpp">
+      <Filter>Engine</Filter>
+    </ClCompile>
+    <ClCompile Include="CableOutput.cpp">
+      <Filter>Engine</Filter>
+    </ClCompile>
+    <ClCompile Include="VirtualMic.cpp">
+      <Filter>Engine</Filter>
+    </ClCompile>
+    <ClCompile Include="$(GeneratedFilesDir)module.g.cpp">
+      <Filter>Generated Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="pch.h" />
+    <ClInclude Include="App.xaml.h" />
+    <ClInclude Include="MainWindow.xaml.h" />
+    <ClInclude Include="Protocol.h">
+      <Filter>Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="JitterBuffer.h">
+      <Filter>Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="AudioOutput.h">
+      <Filter>Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="StreamServer.h">
+      <Filter>Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="Settings.h">
+      <Filter>Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="SourceArbiter.h">
+      <Filter>Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="Adpcm.h">
+      <Filter>Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="Resampler.h">
+      <Filter>Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="JsonUtil.h">
+      <Filter>Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="BluetoothReceiver.h">
+      <Filter>Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="Pairing.h">
+      <Filter>Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="CableOutput.h">
+      <Filter>Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="VirtualMic.h">
+      <Filter>Engine</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="Engine">
+      <UniqueIdentifier>{0c6e8a51-3f2b-4d7a-b0e4-7f19a2c5d863}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Generated Files">
+      <UniqueIdentifier>{9a4d2f71-6b3e-4c85-a1d0-5e8f3b7c2a94}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="packages.config" />
+    <Manifest Include="app.manifest" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="TrayIcon.cpp" />
+    <ClInclude Include="TrayIcon.h" />
+    <ClInclude Include="Startup.h" />
+    <ClInclude Include="resource.h" />
+    <ClInclude Include="Version.h" />
+    <ResourceCompile Include="Phomic.rc" />
+    <Image Include="Assets\Phomic.ico" />
+  </ItemGroup>
+</Project>

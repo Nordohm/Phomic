@@ -1,0 +1,35 @@
+#include <winver.h>
+#include "resource.h"
+#include "Version.h"
+
+// The first icon is also what Explorer shows for Phomic.exe.
+IDI_PHOMIC ICON "Assets\\Phomic.ico"
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION PHOMIC_VERSION_MAJOR, PHOMIC_VERSION_MINOR, PHOMIC_VERSION_PATCH, 0
+ PRODUCTVERSION PHOMIC_VERSION_MAJOR, PHOMIC_VERSION_MINOR, PHOMIC_VERSION_PATCH, 0
+ FILEFLAGSMASK VS_FFI_FILEFLAGSMASK
+ FILEFLAGS 0x0L
+ FILEOS VOS_NT_WINDOWS32
+ FILETYPE VFT_APP
+ FILESUBTYPE VFT2_UNKNOWN
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904B0"
+        BEGIN
+            VALUE "CompanyName", "Nordohm"
+            VALUE "FileDescription", "Phomic"
+            VALUE "FileVersion", PHOMIC_VERSION_STRING
+            VALUE "InternalName", "Phomic"
+            VALUE "LegalCopyright", PHOMIC_COPYRIGHT
+            VALUE "OriginalFilename", "Phomic.exe"
+            VALUE "ProductName", "Phomic"
+            VALUE "ProductVersion", PHOMIC_VERSION_STRING
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END

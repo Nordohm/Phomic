@@ -1,0 +1,211 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  libopus 1.6.1 (BSD-3-Clause, see COPYING), core codec only: floating point, portable C,
+  no SIMD-specific or neural-network (DNN) sources. Built as a static library and linked
+  into Phomic.exe, so users never install anything for it. Source list: celt_sources.mk,
+  silk_sources.mk (+ float), opus_sources.mk (+ float) from the release tarball.
+-->
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|ARM64">
+      <Configuration>Debug</Configuration>
+      <Platform>ARM64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|ARM64">
+      <Configuration>Release</Configuration>
+      <Platform>ARM64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{7d3c1e52-90a4-4c3b-8f0e-2b6a5d41c9e7}</ProjectGuid>
+    <RootNamespace>opus</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <PlatformToolset Condition="'$(VisualStudioVersion)' &gt;= '18.0'">v145</PlatformToolset>
+    <PlatformToolset Condition="'$(VisualStudioVersion)' &lt; '18.0'">v143</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)'=='Debug'" Label="Configuration">
+    <UseDebugLibraries>true</UseDebugLibraries>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)'=='Release'" Label="Configuration">
+    <UseDebugLibraries>false</UseDebugLibraries>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <PropertyGroup>
+    <OutDir>$(SolutionDir)$(Platform)\$(Configuration)\opus\</OutDir>
+    <IntDir>$(SolutionDir)$(Platform)\$(Configuration)\opus\obj\</IntDir>
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <PreprocessorDefinitions>OPUS_BUILD;USE_ALLOCA;HAVE_LRINTF;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(ProjectDir)include;$(ProjectDir)celt;$(ProjectDir)silk;$(ProjectDir)silk\float;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <WarningLevel>Level1</WarningLevel>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <!-- Without this, Debug builds of the codec are slow enough to matter. -->
+      <Optimization>MaxSpeed</Optimization>
+      <BasicRuntimeChecks>Default</BasicRuntimeChecks>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)'=='Debug'">
+    <ClCompile>
+      <PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)'=='Release'">
+    <ClCompile>
+      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="celt\bands.c" />
+    <ClCompile Include="celt\celt.c" />
+    <ClCompile Include="celt\celt_encoder.c" />
+    <ClCompile Include="celt\celt_decoder.c" />
+    <ClCompile Include="celt\cwrs.c" />
+    <ClCompile Include="celt\entcode.c" />
+    <ClCompile Include="celt\entdec.c" />
+    <ClCompile Include="celt\entenc.c" />
+    <ClCompile Include="celt\kiss_fft.c" />
+    <ClCompile Include="celt\laplace.c" />
+    <ClCompile Include="celt\mathops.c" />
+    <ClCompile Include="celt\mdct.c" />
+    <ClCompile Include="celt\modes.c" />
+    <ClCompile Include="celt\pitch.c" />
+    <ClCompile Include="celt\celt_lpc.c" />
+    <ClCompile Include="celt\quant_bands.c" />
+    <ClCompile Include="celt\rate.c" />
+    <ClCompile Include="celt\vq.c" />
+    <ClCompile Include="silk\CNG.c" />
+    <ClCompile Include="silk\code_signs.c" />
+    <ClCompile Include="silk\init_decoder.c" />
+    <ClCompile Include="silk\decode_core.c" />
+    <ClCompile Include="silk\decode_frame.c" />
+    <ClCompile Include="silk\decode_parameters.c" />
+    <ClCompile Include="silk\decode_indices.c" />
+    <ClCompile Include="silk\decode_pulses.c" />
+    <ClCompile Include="silk\decoder_set_fs.c" />
+    <ClCompile Include="silk\dec_API.c" />
+    <ClCompile Include="silk\enc_API.c" />
+    <ClCompile Include="silk\encode_indices.c" />
+    <ClCompile Include="silk\encode_pulses.c" />
+    <ClCompile Include="silk\gain_quant.c" />
+    <ClCompile Include="silk\interpolate.c" />
+    <ClCompile Include="silk\LP_variable_cutoff.c" />
+    <ClCompile Include="silk\NLSF_decode.c" />
+    <ClCompile Include="silk\NSQ.c" />
+    <ClCompile Include="silk\NSQ_del_dec.c" />
+    <ClCompile Include="silk\PLC.c" />
+    <ClCompile Include="silk\shell_coder.c" />
+    <ClCompile Include="silk\tables_gain.c" />
+    <ClCompile Include="silk\tables_LTP.c" />
+    <ClCompile Include="silk\tables_NLSF_CB_NB_MB.c" />
+    <ClCompile Include="silk\tables_NLSF_CB_WB.c" />
+    <ClCompile Include="silk\tables_other.c" />
+    <ClCompile Include="silk\tables_pitch_lag.c" />
+    <ClCompile Include="silk\tables_pulses_per_block.c" />
+    <ClCompile Include="silk\VAD.c" />
+    <ClCompile Include="silk\control_audio_bandwidth.c" />
+    <ClCompile Include="silk\quant_LTP_gains.c" />
+    <ClCompile Include="silk\VQ_WMat_EC.c" />
+    <ClCompile Include="silk\HP_variable_cutoff.c" />
+    <ClCompile Include="silk\NLSF_encode.c" />
+    <ClCompile Include="silk\NLSF_VQ.c" />
+    <ClCompile Include="silk\NLSF_unpack.c" />
+    <ClCompile Include="silk\NLSF_del_dec_quant.c" />
+    <ClCompile Include="silk\process_NLSFs.c" />
+    <ClCompile Include="silk\stereo_LR_to_MS.c" />
+    <ClCompile Include="silk\stereo_MS_to_LR.c" />
+    <ClCompile Include="silk\check_control_input.c" />
+    <ClCompile Include="silk\control_SNR.c" />
+    <ClCompile Include="silk\init_encoder.c" />
+    <ClCompile Include="silk\control_codec.c" />
+    <ClCompile Include="silk\A2NLSF.c" />
+    <ClCompile Include="silk\ana_filt_bank_1.c" />
+    <ClCompile Include="silk\biquad_alt.c" />
+    <ClCompile Include="silk\bwexpander_32.c" />
+    <ClCompile Include="silk\bwexpander.c" />
+    <ClCompile Include="silk\debug.c" />
+    <ClCompile Include="silk\decode_pitch.c" />
+    <ClCompile Include="silk\inner_prod_aligned.c" />
+    <ClCompile Include="silk\lin2log.c" />
+    <ClCompile Include="silk\log2lin.c" />
+    <ClCompile Include="silk\LPC_analysis_filter.c" />
+    <ClCompile Include="silk\LPC_inv_pred_gain.c" />
+    <ClCompile Include="silk\table_LSF_cos.c" />
+    <ClCompile Include="silk\NLSF2A.c" />
+    <ClCompile Include="silk\NLSF_stabilize.c" />
+    <ClCompile Include="silk\NLSF_VQ_weights_laroia.c" />
+    <ClCompile Include="silk\pitch_est_tables.c" />
+    <ClCompile Include="silk\resampler.c" />
+    <ClCompile Include="silk\resampler_down2_3.c" />
+    <ClCompile Include="silk\resampler_down2.c" />
+    <ClCompile Include="silk\resampler_private_AR2.c" />
+    <ClCompile Include="silk\resampler_private_down_FIR.c" />
+    <ClCompile Include="silk\resampler_private_IIR_FIR.c" />
+    <ClCompile Include="silk\resampler_private_up2_HQ.c" />
+    <ClCompile Include="silk\resampler_rom.c" />
+    <ClCompile Include="silk\sigm_Q15.c" />
+    <ClCompile Include="silk\sort.c" />
+    <ClCompile Include="silk\sum_sqr_shift.c" />
+    <ClCompile Include="silk\stereo_decode_pred.c" />
+    <ClCompile Include="silk\stereo_encode_pred.c" />
+    <ClCompile Include="silk\stereo_find_predictor.c" />
+    <ClCompile Include="silk\stereo_quant_pred.c" />
+    <ClCompile Include="silk\LPC_fit.c" />
+    <ClCompile Include="silk\float\apply_sine_window_FLP.c" />
+    <ClCompile Include="silk\float\corrMatrix_FLP.c" />
+    <ClCompile Include="silk\float\encode_frame_FLP.c" />
+    <ClCompile Include="silk\float\find_LPC_FLP.c" />
+    <ClCompile Include="silk\float\find_LTP_FLP.c" />
+    <ClCompile Include="silk\float\find_pitch_lags_FLP.c" />
+    <ClCompile Include="silk\float\find_pred_coefs_FLP.c" />
+    <ClCompile Include="silk\float\LPC_analysis_filter_FLP.c" />
+    <ClCompile Include="silk\float\LTP_analysis_filter_FLP.c" />
+    <ClCompile Include="silk\float\LTP_scale_ctrl_FLP.c" />
+    <ClCompile Include="silk\float\noise_shape_analysis_FLP.c" />
+    <ClCompile Include="silk\float\process_gains_FLP.c" />
+    <ClCompile Include="silk\float\regularize_correlations_FLP.c" />
+    <ClCompile Include="silk\float\residual_energy_FLP.c" />
+    <ClCompile Include="silk\float\warped_autocorrelation_FLP.c" />
+    <ClCompile Include="silk\float\wrappers_FLP.c" />
+    <ClCompile Include="silk\float\autocorrelation_FLP.c" />
+    <ClCompile Include="silk\float\burg_modified_FLP.c" />
+    <ClCompile Include="silk\float\bwexpander_FLP.c" />
+    <ClCompile Include="silk\float\energy_FLP.c" />
+    <ClCompile Include="silk\float\inner_product_FLP.c" />
+    <ClCompile Include="silk\float\k2a_FLP.c" />
+    <ClCompile Include="silk\float\LPC_inv_pred_gain_FLP.c" />
+    <ClCompile Include="silk\float\pitch_analysis_core_FLP.c" />
+    <ClCompile Include="silk\float\scale_copy_vector_FLP.c" />
+    <ClCompile Include="silk\float\scale_vector_FLP.c" />
+    <ClCompile Include="silk\float\schur_FLP.c" />
+    <ClCompile Include="silk\float\sort_FLP.c" />
+    <ClCompile Include="src\opus.c" />
+    <ClCompile Include="src\opus_decoder.c" />
+    <ClCompile Include="src\opus_encoder.c" />
+    <ClCompile Include="src\extensions.c" />
+    <ClCompile Include="src\opus_multistream.c" />
+    <ClCompile Include="src\opus_multistream_encoder.c" />
+    <ClCompile Include="src\opus_multistream_decoder.c" />
+    <ClCompile Include="src\repacketizer.c" />
+    <ClCompile Include="src\opus_projection_encoder.c" />
+    <ClCompile Include="src\opus_projection_decoder.c" />
+    <ClCompile Include="src\mapping_matrix.c" />
+    <ClCompile Include="src\analysis.c" />
+    <ClCompile Include="src\mlp.c" />
+    <ClCompile Include="src\mlp_data.c" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+</Project>
