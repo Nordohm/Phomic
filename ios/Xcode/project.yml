@@ -18,7 +18,6 @@ settings:
     MARKETING_VERSION: "1.0.0"
     CURRENT_PROJECT_VERSION: "1" # CI passes the run number
     SWIFT_VERSION: "6.0"
-    TARGETED_DEVICE_FAMILY: "1" # iPhone (iPads run it as an iPhone app)
     CODE_SIGN_STYLE: Automatic # CI switches to Manual with its own certificate
 targets:
   PhomicApp:
@@ -42,6 +41,9 @@ targets:
         PRODUCT_NAME: Phomic
         PRODUCT_MODULE_NAME: PhomicApp # the package has a target named Phomic
         PRODUCT_BUNDLE_IDENTIFIER: io.github.nordohm.Phomic
+        # iPhone only (iPads run it as an iPhone app). Set per target: XcodeGen's iOS preset puts
+        # "1,2" on every target, which would win over a project-level value.
+        TARGETED_DEVICE_FAMILY: "1"
         INFOPLIST_FILE: $(SRCROOT)/../Phomic-Info.plist
         GENERATE_INFOPLIST_FILE: YES # merged with Phomic-Info.plist
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.utilities
@@ -64,6 +66,7 @@ targets:
         PRODUCT_NAME: PhomicWidget
         PRODUCT_MODULE_NAME: PhomicWidgetExtension # the package has a target named PhomicWidget
         PRODUCT_BUNDLE_IDENTIFIER: io.github.nordohm.Phomic.PhomicWidget
+        TARGETED_DEVICE_FAMILY: "1" # same as the app
         INFOPLIST_FILE: $(SRCROOT)/../PhomicWidget-Info.plist
         GENERATE_INFOPLIST_FILE: YES
         SKIP_INSTALL: YES
