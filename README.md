@@ -212,7 +212,7 @@ App Store Connect only takes apps built with Xcode, and Xcode only runs on a Mac
 into an Xcode project ([`ios/Xcode/project.yml`](ios/Xcode/project.yml), with
 [XcodeGen](https://github.com/yonaskolb/XcodeGen)) and builds it. With **Upload** off it only checks that it builds;
 with it on, it signs the app and uploads it to App Store Connect, where it appears under TestFlight. The build
-number is the workflow's run number. The App Store build is iPhone-only; iPads run it as an iPhone app.
+number is the workflow's run number + 10. The App Store build is iPhone-only; iPads run it as an iPhone app.
 
 One-time setup for uploads (needs the paid Apple Developer Program):
 
