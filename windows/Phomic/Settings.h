@@ -19,5 +19,6 @@ namespace phomic::settings
     inline constexpr wchar_t kBufferMode[] = L"BufferMode"; // 0 = Auto, 1-3 = 30/60/120 ms
     inline constexpr wchar_t kBluetooth[] = L"Bluetooth";
     inline constexpr wchar_t kWiFi[] = L"WiFi";
+    inline constexpr wchar_t kUsb[] = L"Usb";
     inline constexpr wchar_t kCloseToTray[] = L"CloseToTray";
 }

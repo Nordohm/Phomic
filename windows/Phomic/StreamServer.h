@@ -42,8 +42,8 @@ namespace phomic
 
         // Ask the connected phone to disconnect (thread-safe).
         void Disconnect();
-        // Ask the connected phone to move the session to Bluetooth (thread-safe).
-        void RequestSwitchToBluetooth() { m_switchToBluetooth = true; }
+        // Ask the connected phone to move the session to another transport (thread-safe).
+        void RequestSwitch(Source to) { m_switchTo = static_cast<int>(to); }
         // Re-publish the Bonjour record (after the pairing setting changed). UI thread.
         void RefreshAdvertisement();
         // Finishes re-publishing (see RefreshAdvertisement). UI thread, every ~50 ms.
@@ -76,7 +76,6 @@ namespace phomic
         void CheckTimeouts();
         void DropActive(std::wstring const& reason, bool sendBye);
         void ClosePending();
-        void SendLine(SOCKET socket, std::string const& json);
         void CloseSockets();
 
         void RegisterService();
@@ -92,7 +91,7 @@ namespace phomic
         std::thread m_thread;
         std::atomic<bool> m_stop{ false };
         std::atomic<bool> m_disconnectRequested{ false };
-        std::atomic<bool> m_switchToBluetooth{ false };
+        std::atomic<int> m_switchTo{ 0 };   // a Source, 0 = none
         std::atomic<float> m_peak{ 0.f };
 
         SOCKET m_listen = INVALID_SOCKET;

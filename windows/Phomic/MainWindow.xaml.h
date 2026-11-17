@@ -7,6 +7,7 @@
 #include "BluetoothReceiver.h"
 #include "SourceArbiter.h"
 #include "StreamServer.h"
+#include "UsbReceiver.h"
 #include "TrayIcon.h"
 
 namespace winrt::Phomic::implementation
@@ -38,6 +39,14 @@ namespace winrt::Phomic::implementation
             winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
         void SwitchToBluetoothButton_Click(winrt::Windows::Foundation::IInspectable const& sender,
             winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
+        void UsbToggle_Toggled(winrt::Windows::Foundation::IInspectable const& sender,
+            winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
+        void SwitchToUsbButton_Click(winrt::Windows::Foundation::IInspectable const& sender,
+            winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
+        void GetIPhoneAppLink_Click(winrt::Windows::Foundation::IInspectable const& sender,
+            winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
+        void UsbActionButton_Click(winrt::Windows::Foundation::IInspectable const& sender,
+            winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
         void PairingCheck_Click(winrt::Windows::Foundation::IInspectable const& sender,
             winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
         void NewCodeButton_Click(winrt::Windows::Foundation::IInspectable const& sender,
@@ -58,6 +67,9 @@ namespace winrt::Phomic::implementation
             HRESULT hr = S_OK;
         };
         void UpdateMicSetup();
+        winrt::fire_and_forget ShowAppStoreBadge();
+        winrt::fire_and_forget ShowIPhoneAppCode();
+        double m_badgeScale = 0;        // display scale the App Store badge was drawn for
         void RunMicAction(MicAction action);
         static MicResult RunMicActionBlocking(MicAction action);
         void OnMicActionDone(MicResult const& result);
@@ -73,22 +85,30 @@ namespace winrt::Phomic::implementation
         bool OutputRunning() const;
         void OnTick();
         void ApplyBufferTarget();
-        void UpdateConnection(phomic::StreamServer::Status const& wifi, phomic::BluetoothReceiver::Status const& bluetooth);
-        void UpdateTransports(phomic::StreamServer::Status const& wifi, phomic::BluetoothReceiver::Status const& bluetooth);
+        void UpdateConnection(phomic::StreamServer::Status const& wifi, phomic::BluetoothReceiver::Status const& bluetooth,
+            phomic::UsbReceiver::Status const& usb);
+        void TrackLastDisconnect(phomic::StreamServer::Status const& wifi, phomic::BluetoothReceiver::Status const& bluetooth,
+            phomic::UsbReceiver::Status const& usb);
+        void UpdateTransports(phomic::StreamServer::Status const& wifi, phomic::BluetoothReceiver::Status const& bluetooth,
+            phomic::UsbReceiver::Status const& usb);
+        void RefreshTransports();
+        void RequestSwitch(phomic::Source to);
         void StartWiFi();
         void UpdatePairing();
-        void UpdateDetails(phomic::StreamServer::Status const& wifi, phomic::BluetoothReceiver::Status const& bluetooth);
+        void UpdateDetails(phomic::StreamServer::Status const& wifi, phomic::BluetoothReceiver::Status const& bluetooth,
+            phomic::UsbReceiver::Status const& usb);
         static void SetDetailRows(winrt::Microsoft::UI::Xaml::Controls::Grid const& grid,
             std::vector<std::pair<std::wstring, std::wstring>> const& rows);
         void ShowError(std::wstring const& title, std::wstring const& message);
         void Shutdown();
 
         // Declaration order matters: members are destroyed in reverse order, and the
-        // output, server and Bluetooth receiver all use the jitter buffer and arbiter.
+        // output, server and Bluetooth and USB receivers all use the jitter buffer and arbiter.
         phomic::SourceArbiter m_arbiter;
         std::unique_ptr<phomic::JitterBuffer> m_jitter;
         std::unique_ptr<phomic::StreamServer> m_server;
         std::shared_ptr<phomic::BluetoothReceiver> m_bluetooth;
+        std::unique_ptr<phomic::UsbReceiver> m_usb;
         std::unique_ptr<phomic::AudioOutput> m_output;
         std::unique_ptr<phomic::CableOutput> m_cableOutput;
         std::unique_ptr<phomic::DeviceWatcher> m_watcher;
@@ -97,6 +117,14 @@ namespace winrt::Phomic::implementation
         bool m_appliedAuto = false;
         std::wstring m_shownBluetooth;
         std::wstring m_shownWiFi;
+        std::wstring m_shownUsb;
+        // What the USB row's button does (it fixes the problem the row describes).
+        enum class UsbAction { None, GetAppleDevices, StartService, OpenAppleDevices, CopyCommand };
+        UsbAction m_usbAction = UsbAction::None;
+        std::wstring m_usbCommand;      // CopyCommand: what goes on the clipboard
+        uint64_t m_usbCopiedTick = 0;
+        uint64_t m_usbStartTick = 0;    // StartService clicked: if it doesn't help, offer the window
+        bool m_showingAppCode = false;  // WinUI allows one ContentDialog at a time
         bool m_wifiEnabled = true;
         uint64_t m_switchRequestedTick = 0;
         // Wi-Fi server start, retried while the port is busy (see StartWiFi).
@@ -129,6 +157,8 @@ namespace winrt::Phomic::implementation
         float m_meter = 0.f;
         std::wstring m_shownTitle;
         std::wstring m_shownDetail;
+        std::wstring m_seenDisconnect[3];   // Wi-Fi, Bluetooth, USB: last reason each reported
+        std::wstring m_lastDisconnect;      // the newest of them (see TrackLastDisconnect)
 
         uint64_t m_lastPackets = 0;
         uint64_t m_lastReceived = 0;

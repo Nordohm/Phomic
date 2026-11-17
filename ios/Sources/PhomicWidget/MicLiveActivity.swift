@@ -14,11 +14,11 @@ struct PhomicWidgetBundle: WidgetBundle {
 struct MicLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: MicActivityAttributes.self) { context in
-            LockScreenView(state: context.state)
+            LockScreenView(state: context.state.shown(stale: context.isStale))
                 .activityBackgroundTint(Color.black.opacity(0.6))
                 .activitySystemActionForegroundColor(.white)
         } dynamicIsland: { context in
-            let state = context.state
+            let state = context.state.shown(stale: context.isStale)
             return DynamicIsland {
                 // The badge and the transport icon sit in boxes of the same size, centered
                 // vertically, with the same margin on every side, so they mirror each other.
@@ -38,7 +38,7 @@ struct MicLiveActivity: Widget {
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
-                    TransportIcon(bluetooth: state.bluetooth, size: 26)
+                    TransportIcon(transport: state.transport, size: 26)
                         .foregroundStyle(.secondary)
                         .frame(width: Self.badge, height: Self.badge)
                         .frame(maxHeight: .infinity)
@@ -47,7 +47,7 @@ struct MicLiveActivity: Widget {
                 Image(systemName: state.micSymbol)
                     .foregroundStyle(state.color)
             } compactTrailing: {
-                TransportIcon(bluetooth: state.bluetooth, size: 18)
+                TransportIcon(transport: state.transport, size: 18)
                     .foregroundStyle(.secondary)
             } minimal: {
                 Image(systemName: state.micSymbol)
@@ -71,7 +71,7 @@ private struct LockScreenView: View {
                 Text(state.title)
                     .font(.headline)
                 HStack(spacing: 6) {
-                    TransportIcon(bluetooth: state.bluetooth, size: 16)
+                    TransportIcon(transport: state.transport, size: 16)
                     Text(state.pcName)
                         .lineLimit(1)
                 }
@@ -117,11 +117,22 @@ private struct MicBadge: View {
 }
 
 private extension MicActivityAttributes.ContentState {
+    /// Phomic renews the activity while it runs; one gone stale means Phomic stopped without
+    /// ending it (a crash, say), so it shows as stopped instead of live.
+    func shown(stale: Bool) -> Self {
+        guard stale else { return self }
+        var state = self
+        state.status = .reconnecting
+        state.stopped = true
+        return state
+    }
+
     var title: String {
+        if stopped { return "Phomic stopped" }
         switch status {
-        case .live: "Live"
-        case .muted: "Muted"
-        case .reconnecting: "Reconnecting…"
+        case .live: return "Live"
+        case .muted: return "Muted"
+        case .reconnecting: return "Reconnecting…"
         }
     }
 

@@ -11,8 +11,11 @@
 #include "VirtualMic.h"
 #include "CableOutput.h"
 #include "Pairing.h"
+#include "AppleUsb.h"
 
 #include <shellapi.h>
+#include <winrt/Windows.ApplicationModel.DataTransfer.h>
+#include <winrt/Microsoft.UI.Xaml.Media.Imaging.h>
 
 using namespace winrt;
 using namespace Microsoft::UI::Xaml;
@@ -80,6 +83,7 @@ namespace winrt::Phomic::implementation
         const int gainDb = std::clamp(settings::GetInt(settings::kGainDb, 0), -12, 24);
         const bool bluetoothEnabled = settings::GetInt(settings::kBluetooth, 1) != 0;
         m_wifiEnabled = settings::GetInt(settings::kWiFi, 1) != 0;
+        const bool usbEnabled = settings::GetInt(settings::kUsb, 1) != 0;
 
         m_jitter = std::make_unique<phomic::JitterBuffer>();
         m_gain = DbToGain(gainDb);
@@ -99,6 +103,8 @@ namespace winrt::Phomic::implementation
         m_server = std::make_unique<phomic::StreamServer>(*m_jitter, m_arbiter);
         m_bluetooth = std::make_shared<phomic::BluetoothReceiver>(*m_jitter, m_arbiter, m_server->ServiceName());
         m_bluetooth->SetEnabled(bluetoothEnabled);
+        m_usb = std::make_unique<phomic::UsbReceiver>(*m_jitter, m_arbiter, m_server->ServiceName());
+        m_usb->SetEnabled(usbEnabled);
         m_watcher = std::make_unique<phomic::DeviceWatcher>();
 
         BufferCombo().SelectedIndex(m_bufferPreset);
@@ -106,6 +112,7 @@ namespace winrt::Phomic::implementation
         GainSlider().Header(box_value(hstring(std::format(L"Gain ({:+d} dB)", gainDb))));
         BluetoothToggle().IsOn(bluetoothEnabled);
         WiFiToggle().IsOn(m_wifiEnabled);
+        UsbToggle().IsOn(usbEnabled);
         PairingCheck().IsChecked(phomic::pairing::Required());
         UpdatePairing();
         phomic::startup::Repair();
@@ -137,12 +144,23 @@ namespace winrt::Phomic::implementation
             bar.Closed([](InfoBar const& sender, auto&&) { sender.Visibility(Visibility::Collapsed); });
         }
 
+        FooterText().Text(L"Phomic " PHOMIC_VERSION_STRING L" is free and open source.");
+        ShowAppStoreBadge();
+        RootPanel().ActualThemeChanged([weak = get_weak()](auto&&, auto&&)
+        {
+            if (auto self = weak.get())
+            {
+                self->ShowAppStoreBadge();
+            }
+        });
+
         m_initialized = true;
         const auto wifi = m_server->GetStatus();
         const auto bluetooth = m_bluetooth->GetStatus();
-        UpdateConnection(wifi, bluetooth);
-        UpdateTransports(wifi, bluetooth);
-        UpdateDetails(wifi, bluetooth);
+        const auto usb = m_usb->GetStatus();
+        UpdateConnection(wifi, bluetooth, usb);
+        UpdateTransports(wifi, bluetooth, usb);
+        UpdateDetails(wifi, bluetooth, usb);
     }
 
     void MainWindow::StartWiFi()
@@ -183,6 +201,10 @@ namespace winrt::Phomic::implementation
         if (m_bluetooth)
         {
             m_bluetooth->Shutdown();
+        }
+        if (m_usb)
+        {
+            m_usb->Shutdown();
         }
         if (m_server)
         {
@@ -232,6 +254,10 @@ namespace winrt::Phomic::implementation
             {
                 const double height = self->RootPanel().DesiredSize().Height; // includes its margin
                 const double scale = GetDpiForWindow(self->WindowHandle()) / 96.0;
+                if (scale != self->m_badgeScale && self->m_badgeScale != 0)
+                {
+                    self->ShowAppStoreBadge(); // draw it sharp for the new display
+                }
                 if (height != self->m_contentHeight || scale != self->m_neededScale)
                 {
                     self->m_contentHeight = height;
@@ -628,6 +654,118 @@ namespace winrt::Phomic::implementation
         }
     }
 
+    namespace
+    {
+        // A stream over one of the exe's RCDATA resources.
+        winrt::Windows::Foundation::IAsyncOperation<winrt::Windows::Storage::Streams::IRandomAccessStream> ResourceStream(int id)
+        {
+            const HMODULE module = GetModuleHandleW(nullptr);
+            const HRSRC resource = FindResourceW(module, MAKEINTRESOURCEW(id), RT_RCDATA);
+            const HGLOBAL loaded = resource ? LoadResource(module, resource) : nullptr;
+            const auto data = loaded ? static_cast<const uint8_t*>(LockResource(loaded)) : nullptr;
+            winrt::Windows::Storage::Streams::InMemoryRandomAccessStream stream;
+            if (data)
+            {
+                winrt::Windows::Storage::Streams::DataWriter writer(stream);
+                writer.WriteBytes(winrt::array_view<const uint8_t>(data, data + SizeofResource(module, resource)));
+                co_await writer.StoreAsync();
+                writer.DetachStream();
+                stream.Seek(0);
+            }
+            co_return stream;
+        }
+    }
+
+    // Apple's badge for the current theme: black in light mode, white in dark mode, drawn at
+    // the display's pixel size so its small print stays sharp.
+    winrt::fire_and_forget MainWindow::ShowAppStoreBadge()
+    {
+        auto weak = get_weak();
+        const bool dark = RootPanel().ActualTheme() == ElementTheme::Dark;
+        const HWND hwnd = WindowHandle();
+        m_badgeScale = (hwnd ? GetDpiForWindow(hwnd) : 96) / 96.0;
+        auto stream = co_await ResourceStream(dark ? IDR_BADGE_WHITE : IDR_BADGE_BLACK);
+        if (stream.Size() == 0)
+        {
+            co_return;
+        }
+        if (auto self = weak.get())
+        {
+            Media::Imaging::SvgImageSource badge;
+            badge.RasterizePixelHeight(self->AppStoreBadge().Height() * self->m_badgeScale);
+            self->AppStoreBadge().Source(badge);
+            co_await badge.SetSourceAsync(stream);
+        }
+    }
+
+    // The app goes on the iPhone, so the useful thing on a PC is a code to scan with it.
+    winrt::fire_and_forget MainWindow::ShowIPhoneAppCode()
+    {
+        if (m_showingAppCode)
+        {
+            co_return; // e.g. a double click
+        }
+        m_showingAppCode = true;
+        auto weak = get_weak();
+        Media::Imaging::BitmapImage code;
+        Image image;
+        image.Width(240);
+        image.Height(240);
+        image.Source(code);
+
+        TextBlock text;
+        text.Text(L"Scan the code with your iPhone's camera to open Phomic on the App Store.");
+        text.TextWrapping(TextWrapping::Wrap);
+        text.TextAlignment(TextAlignment::Center);
+        StackPanel panel;
+        panel.Spacing(16);
+        panel.MaxWidth(320);
+        panel.Children().Append(image);
+        panel.Children().Append(text);
+
+        ContentDialog dialog;
+        dialog.XamlRoot(Content().XamlRoot());
+        dialog.Style(Application::Current().Resources().Lookup(box_value(L"DefaultContentDialogStyle")).as<Style>());
+        dialog.RequestedTheme(RootPanel().ActualTheme());
+        dialog.Title(box_value(L"Phomic for iPhone"));
+        dialog.Content(panel);
+        dialog.PrimaryButtonText(L"Open in browser");
+        dialog.CloseButtonText(L"Close");
+        dialog.DefaultButton(ContentDialogButton::Close);
+
+        auto stream = co_await ResourceStream(IDR_APPSTORE_QR);
+        if (stream.Size() != 0)
+        {
+            co_await code.SetSourceAsync(stream);
+        }
+        if (!weak.get())
+        {
+            co_return;
+        }
+        ContentDialogResult result = ContentDialogResult::None;
+        try
+        {
+            result = co_await dialog.ShowAsync();
+        }
+        catch (winrt::hresult_error const&)
+        {
+            // Another dialog (e.g. Windows' own) is open: nothing to show now.
+        }
+        if (auto self = weak.get())
+        {
+            self->m_showingAppCode = false;
+        }
+        if (result == ContentDialogResult::Primary)
+        {
+            ShellExecuteW(nullptr, L"open", L"https://apps.apple.com/app/phomic/id6835323092", nullptr, nullptr, SW_SHOWNORMAL);
+        }
+    }
+
+    void MainWindow::GetIPhoneAppLink_Click(winrt::Windows::Foundation::IInspectable const&, RoutedEventArgs const&)
+    {
+        ShowIPhoneAppCode();
+    }
+
     void MainWindow::ShowError(std::wstring const& title, std::wstring const& message)
     {
         ErrorBar().Title(title);
@@ -693,10 +831,11 @@ namespace winrt::Phomic::implementation
 
         const auto wifi = m_server->GetStatus();
         const auto bluetooth = m_bluetooth->GetStatus();
-        const bool live = wifi.connected || bluetooth.connected;
+        const auto usb = m_usb->GetStatus();
+        const bool live = wifi.connected || bluetooth.connected || usb.connected;
 
         // Level meter: post-gain peak in dBFS, fast attack, slow release.
-        float peak = std::max(m_server->TakePeak(), m_bluetooth->TakePeak()) * m_gain.load();
+        float peak = std::max({ m_server->TakePeak(), m_bluetooth->TakePeak(), m_usb->TakePeak() }) * m_gain.load();
         if (!live)
         {
             peak = 0.f;
@@ -712,25 +851,48 @@ namespace winrt::Phomic::implementation
                 : std::format(L"{:.0f} dB{}", db, peak >= 0.99f ? L" · clipping" : L""));
         }
 
-        UpdateConnection(wifi, bluetooth);
+        UpdateConnection(wifi, bluetooth, usb);
         if (m_tick % 5 == 0)
         {
-            UpdateTransports(wifi, bluetooth);
+            UpdateTransports(wifi, bluetooth, usb);
         }
         if (m_tick % kTicksPerSecond == 0)
         {
-            UpdateDetails(wifi, bluetooth);
+            UpdateDetails(wifi, bluetooth, usb);
         }
     }
 
-    void MainWindow::UpdateConnection(phomic::StreamServer::Status const& wifi, phomic::BluetoothReceiver::Status const& bluetooth)
+    // Each transport keeps the reason its own last session ended; the status card shows the
+    // newest one, whichever transport it came from.
+    void MainWindow::TrackLastDisconnect(phomic::StreamServer::Status const& wifi,
+        phomic::BluetoothReceiver::Status const& bluetooth, phomic::UsbReceiver::Status const& usb)
     {
-        const bool live = wifi.connected || bluetooth.connected;
-        const bool muted = wifi.connected ? wifi.muted : bluetooth.muted;
+        std::wstring const* reasons[] = { &wifi.lastDisconnect, &bluetooth.lastDisconnect, &usb.lastDisconnect };
+        for (size_t i = 0; i < std::size(reasons); ++i)
+        {
+            if (*reasons[i] != m_seenDisconnect[i])
+            {
+                m_seenDisconnect[i] = *reasons[i];
+                if (!reasons[i]->empty())
+                {
+                    m_lastDisconnect = *reasons[i];
+                }
+            }
+        }
+    }
+
+    void MainWindow::UpdateConnection(phomic::StreamServer::Status const& wifi, phomic::BluetoothReceiver::Status const& bluetooth,
+        phomic::UsbReceiver::Status const& usb)
+    {
+        TrackLastDisconnect(wifi, bluetooth, usb);
+        const bool live = wifi.connected || bluetooth.connected || usb.connected;
+        const bool muted = wifi.connected ? wifi.muted : usb.connected ? usb.muted : bluetooth.muted;
         IdleBadge().Visibility(live ? Visibility::Collapsed : Visibility::Visible);
         LiveBadge().Visibility(live ? Visibility::Visible : Visibility::Collapsed);
         LiveBadge().Opacity(muted ? 0.4 : 1.0);
-        DisconnectButton().Visibility(live ? Visibility::Visible : Visibility::Collapsed);
+        // Over USB the cable decides: there's nothing to disconnect.
+        DisconnectButton().Visibility(live && !usb.connected ? Visibility::Visible : Visibility::Collapsed);
+        GetIPhoneAppLink().Visibility(live ? Visibility::Collapsed : Visibility::Visible);
 
         std::wstring title;
         std::wstring detail;
@@ -776,25 +938,44 @@ namespace winrt::Phomic::implementation
                     : std::wstring(L"Bluetooth");
             }
         }
+        else if (usb.connected)
+        {
+            if (usb.muted)
+            {
+                title = std::format(L"{} is muted", usb.deviceName);
+                detail = L"Unmute on the iPhone to send audio again.";
+            }
+            else if (usb.msSinceAudio > 1500)
+            {
+                title = std::format(L"Connected to {}", usb.deviceName);
+                detail = L"Connected over USB, waiting for audio…";
+            }
+            else
+            {
+                title = std::format(L"Streaming from {}", usb.deviceName);
+                detail = L"USB cable";
+                if (usb.rttMs >= 0)
+                {
+                    detail += std::format(L" · {:.0f} ms round trip", usb.rttMs);
+                }
+            }
+        }
         else if (bluetooth.connecting)
         {
             title = L"Connecting over Bluetooth…";
             detail = L"An iPhone is connecting to this PC.";
         }
-        else if (!(m_wifiEnabled && wifi.listening) && !(bluetooth.supported && bluetooth.enabled))
+        else if (!(m_wifiEnabled && wifi.listening) && !(bluetooth.supported && bluetooth.enabled) &&
+                 !(usb.enabled && usb.serviceRunning))
         {
             title = L"Not accepting connections";
-            detail = m_wifiEnabled && !wifi.error.empty() ? wifi.error : std::wstring(L"Turn on Wi-Fi or Bluetooth under Connection.");
+            detail = m_wifiEnabled && !wifi.error.empty() ? wifi.error : std::wstring(L"Turn on Wi-Fi, Bluetooth or USB under Connection.");
         }
         else
         {
             title = L"Waiting for your iPhone";
-            detail = L"Open Phomic on your iPhone, choose Wi-Fi or Bluetooth, and connect.";
-            const std::wstring& reason = !wifi.lastDisconnect.empty() ? wifi.lastDisconnect : bluetooth.lastDisconnect;
-            if (!reason.empty())
-            {
-                detail = reason + L" " + detail;
-            }
+            // Why the last session ended, if one did; else what to do.
+            detail = m_lastDisconnect.empty() ? std::wstring(L"Open Phomic on your iPhone to connect.") : m_lastDisconnect;
         }
 
         if (title != m_shownTitle)
@@ -813,7 +994,8 @@ namespace winrt::Phomic::implementation
         }
     }
 
-    void MainWindow::UpdateTransports(phomic::StreamServer::Status const& wifi, phomic::BluetoothReceiver::Status const& bluetooth)
+    void MainWindow::UpdateTransports(phomic::StreamServer::Status const& wifi, phomic::BluetoothReceiver::Status const& bluetooth,
+        phomic::UsbReceiver::Status const& usb)
     {
         // Wi-Fi row
         std::wstring wifiText;
@@ -873,6 +1055,81 @@ namespace winrt::Phomic::implementation
             bluetoothText = std::format(L"Ready · iPhones nearby list this PC as “{}”", m_server->ServiceName());
         }
 
+        // USB row: its state, or what's wrong with Apple's USB service and a button that fixes it.
+        std::wstring usbText;
+        UsbAction usbAction = UsbAction::None;
+        std::wstring usbCommand;
+        using phomic::UsbIssue;
+        if (!usb.enabled)
+        {
+            usbText = L"Off";
+        }
+        else if (usb.connected)
+        {
+            usbText = std::format(L"In use · {}", usb.deviceName);
+        }
+        else if (!usb.checked || (!usb.serviceRunning && usb.issue == UsbIssue::None))
+        {
+            usbText = L"Starting…";
+        }
+        else if (usb.issue == UsbIssue::NoAppleDevices)
+        {
+            usbText = L"Needs Apple Devices, Apple's free app that lets Windows talk to an iPhone over a cable";
+            usbAction = UsbAction::GetAppleDevices;
+        }
+        else if (usb.issue == UsbIssue::StartingService)
+        {
+            usbText = L"Waiting for Apple's USB service…";
+        }
+        else if (usb.issue == UsbIssue::ServiceNotRunning)
+        {
+            usbText = L"Apple's USB service didn't start. Opening Apple Devices starts it; you can close the window again.";
+            usbAction = UsbAction::OpenAppleDevices;
+        }
+        else if (usb.issue == UsbIssue::StartupDisabled)
+        {
+            usbText = L"Apple's USB service isn't running: Apple Devices is off under Settings › Apps › Startup. Start it "
+                      L"here, and turn it on there so it starts with Windows.";
+            // If starting it quietly didn't work, the window does.
+            usbAction = m_usbStartTick != 0 && m_tick - m_usbStartTick > 12 * kTicksPerSecond
+                ? UsbAction::OpenAppleDevices : UsbAction::StartService;
+        }
+        else if (usb.issue == UsbIssue::PortForward)
+        {
+            usbText = std::format(L"A Windows port forward on {}:{} blocks Apple's USB service. Remove it from a terminal run as "
+                L"administrator, then open Apple Devices.", usb.forwardAddress, phomic::kUsbmuxPort);
+            usbAction = UsbAction::CopyCommand;
+            usbCommand = std::format(L"netsh interface portproxy delete v4tov4 listenaddress={} listenport={}",
+                usb.forwardAddress, phomic::kUsbmuxPort);
+        }
+        else if (usb.issue == UsbIssue::PortTaken)
+        {
+            usbText = std::format(L"{} uses port {}, which Apple's USB service needs. Close it, then open Apple Devices.",
+                usb.portHolder.empty() ? std::wstring(L"Another program") : usb.portHolder, phomic::kUsbmuxPort);
+        }
+        else if (usb.issue == UsbIssue::ClassicServiceStopped)
+        {
+            usbText = L"Apple Mobile Device Service is stopped. Start it under Services, or install Apple Devices instead.";
+            usbAction = UsbAction::GetAppleDevices;
+        }
+        else if (usb.issue == UsbIssue::DeviceUnreachable)
+        {
+            usbText = L"Apple's USB service can't reach the iPhone. Unplug it and plug it back in, unlocked. "
+                      L"If that doesn't help, restart the iPhone.";
+        }
+        else if (usb.issue == UsbIssue::NotSeenByApple)
+        {
+            usbText = L"Apple's USB service has lost track of the iPhone. Unplug the cable, wait 5 seconds, and plug it back in with the iPhone unlocked.";
+        }
+        else if (usb.devices > 0)
+        {
+            usbText = L"iPhone plugged in · pick USB in Phomic on it";
+        }
+        else
+        {
+            usbText = L"Ready · plug your iPhone into this PC with a cable";
+        }
+
         if (wifiText != m_shownWiFi)
         {
             m_shownWiFi = wifiText;
@@ -883,21 +1140,46 @@ namespace winrt::Phomic::implementation
             m_shownBluetooth = bluetoothText;
             BluetoothText().Text(bluetoothText);
         }
+        if (usbText != m_shownUsb)
+        {
+            m_shownUsb = usbText;
+            UsbText().Text(usbText);
+        }
         BluetoothToggle().IsEnabled(bluetooth.supported);
+        if (usb.issue != UsbIssue::StartupDisabled && usb.issue != UsbIssue::StartingService)
+        {
+            m_usbStartTick = 0; // a later episode starts with the quiet start again
+        }
+        m_usbAction = usbAction;
+        m_usbCommand = usbCommand;
+        const bool copied = m_usbCopiedTick != 0 && m_tick - m_usbCopiedTick < 3 * kTicksPerSecond;
+        UsbActionButton().Content(box_value(
+            usbAction == UsbAction::GetAppleDevices ? L"Get Apple Devices"
+            : usbAction == UsbAction::StartService ? L"Start it"
+            : usbAction == UsbAction::OpenAppleDevices ? L"Open Apple Devices"
+            : copied ? L"Copied" : L"Copy command"));
+        ToolTipService::SetToolTip(UsbActionButton(), box_value(
+            usbAction == UsbAction::GetAppleDevices ? std::wstring(L"Free, from Apple, in the Microsoft Store")
+            : usbAction == UsbAction::CopyCommand ? usbCommand : std::wstring(L"Starts Apple's USB service")));
+        UsbActionButton().Visibility(usbAction != UsbAction::None ? Visibility::Visible : Visibility::Collapsed);
 
-        // "Switch here" on the transport that isn't in use, if it can take over.
+        // "Switch here" on the transports that aren't in use, if they can take over.
         const bool switching = m_switchRequestedTick != 0 && m_tick - m_switchRequestedTick < 4 * kTicksPerSecond;
-        const bool canSwitchToBluetooth = wifi.connected && bluetooth.supported && bluetooth.enabled;
-        const bool canSwitchToWiFi = bluetooth.connected && m_wifiEnabled && wifi.listening;
+        const bool canSwitchToBluetooth = (wifi.connected || usb.connected) && bluetooth.supported && bluetooth.enabled;
+        const bool canSwitchToWiFi = (bluetooth.connected || usb.connected) && m_wifiEnabled && wifi.listening;
+        const bool canSwitchToUsb = (wifi.connected || bluetooth.connected) && usb.enabled && usb.serviceRunning && usb.devices > 0;
         SwitchToBluetoothButton().Visibility(canSwitchToBluetooth ? Visibility::Visible : Visibility::Collapsed);
         SwitchToWiFiButton().Visibility(canSwitchToWiFi ? Visibility::Visible : Visibility::Collapsed);
+        SwitchToUsbButton().Visibility(canSwitchToUsb ? Visibility::Visible : Visibility::Collapsed);
         SwitchToBluetoothButton().IsEnabled(!switching);
         SwitchToWiFiButton().IsEnabled(!switching);
+        SwitchToUsbButton().IsEnabled(!switching);
     }
 
-    void MainWindow::UpdateDetails(phomic::StreamServer::Status const& wifi, phomic::BluetoothReceiver::Status const& bluetooth)
+    void MainWindow::UpdateDetails(phomic::StreamServer::Status const& wifi, phomic::BluetoothReceiver::Status const& bluetooth,
+        phomic::UsbReceiver::Status const& usb)
     {
-        const uint64_t totalPackets = wifi.connected ? wifi.packets : bluetooth.packets;
+        const uint64_t totalPackets = wifi.connected ? wifi.packets : usb.connected ? usb.packets : bluetooth.packets;
         const auto stats = m_jitter->GetStats();
         const uint64_t packets = totalPackets >= m_lastPackets ? totalPackets - m_lastPackets : totalPackets;
         const uint64_t received = stats.received >= m_lastReceived ? stats.received - m_lastReceived : stats.received;
@@ -907,7 +1189,7 @@ namespace winrt::Phomic::implementation
         m_lastConcealed = stats.concealed;
 
         // Stream: only while an iPhone is connected.
-        const bool live = wifi.connected || bluetooth.connected;
+        const bool live = wifi.connected || bluetooth.connected || usb.connected;
         StreamSection().Visibility(live ? Visibility::Visible : Visibility::Collapsed);
         if (live)
         {
@@ -919,6 +1201,15 @@ namespace winrt::Phomic::implementation
                 if (wifi.rttMs >= 0)
                 {
                     link += std::format(L" · {:.0f} ms round trip", wifi.rttMs);
+                }
+                audio = L"48 kHz, uncompressed";
+            }
+            else if (usb.connected)
+            {
+                link = L"USB cable";
+                if (usb.rttMs >= 0)
+                {
+                    link += std::format(L" · {:.0f} ms round trip", usb.rttMs);
                 }
                 audio = L"48 kHz, uncompressed";
             }
@@ -981,6 +1272,13 @@ namespace winrt::Phomic::implementation
             { L"Addresses", addresses.empty() ? std::wstring(L"No network") : addresses },
             { L"Port", std::format(L"{} (TCP and UDP)", m_server->Port()) },
             { L"Bluetooth", bluetoothState.empty() ? std::wstring(L"—") : bluetoothState },
+            { L"USB", !usb.enabled ? std::wstring(L"Off")
+                : !usb.checked ? std::wstring(L"—")
+                : usb.serviceRunning
+                    ? std::format(L"Apple's USB service is running and sees {} iPhone{} (Windows sees {}). Nothing at "
+                                  L"all? Some cables only charge.", usb.devices, usb.devices == 1 ? L"" : L"s", usb.windowsDevices)
+                    : std::format(L"Apple's USB service isn't running (Windows sees {} iPhone{})",
+                                  usb.windowsDevices, usb.windowsDevices == 1 ? L"" : L"s") },
             { L"Version", L"Phomic " PHOMIC_VERSION_STRING },
             // Credit for the driver the microphone runs on: the two facts VB-CABLE's readme asks
             // distributors to mention (Phomic doesn't distribute it, so this is a courtesy).
@@ -1035,6 +1333,7 @@ namespace winrt::Phomic::implementation
     {
         m_server->Disconnect();
         m_bluetooth->Disconnect();
+        m_usb->Disconnect();
     }
 
     void MainWindow::GainSlider_ValueChanged(winrt::Windows::Foundation::IInspectable const& sender,
@@ -1092,7 +1391,7 @@ namespace winrt::Phomic::implementation
         const bool on = BluetoothToggle().IsOn();
         m_bluetooth->SetEnabled(on);
         phomic::settings::SetInt(phomic::settings::kBluetooth, on ? 1 : 0);
-        UpdateTransports(m_server->GetStatus(), m_bluetooth->GetStatus());
+        RefreshTransports();
     }
 
     void MainWindow::WiFiToggle_Toggled(winrt::Windows::Foundation::IInspectable const&, RoutedEventArgs const&)
@@ -1112,14 +1411,14 @@ namespace winrt::Phomic::implementation
             m_wifiRetrying = false;
             m_server->Stop(); // says "bye" to a connected iPhone
         }
-        UpdateTransports(m_server->GetStatus(), m_bluetooth->GetStatus());
+        RefreshTransports();
     }
 
     void MainWindow::UpdatePairing()
     {
         const bool required = phomic::pairing::Required();
         PairingText().Text(required
-            ? std::wstring(L"Each iPhone asks for it once")
+            ? std::wstring(L"Each iPhone asks for it once. Not needed over USB: the cable is enough.")
             : std::wstring(L"Any iPhone running Phomic nearby can connect"));
         PairingCodeText().Text(required ? phomic::pairing::Code() : std::wstring());
         PairingCodeText().Visibility(required ? Visibility::Visible : Visibility::Collapsed);
@@ -1154,19 +1453,79 @@ namespace winrt::Phomic::implementation
         UpdatePairing();
     }
 
+    void MainWindow::RefreshTransports()
+    {
+        UpdateTransports(m_server->GetStatus(), m_bluetooth->GetStatus(), m_usb->GetStatus());
+    }
+
+    // Asks the connected iPhone, over whichever transport it uses, to move to `to`.
+    void MainWindow::RequestSwitch(phomic::Source to)
+    {
+        m_switchRequestedTick = m_tick;
+        m_server->RequestSwitch(to);
+        m_bluetooth->RequestSwitch(to);
+        m_usb->RequestSwitch(to);
+        RefreshTransports();
+    }
+
     void MainWindow::SwitchToBluetoothButton_Click(winrt::Windows::Foundation::IInspectable const&, RoutedEventArgs const&)
     {
-        // The iPhone hangs up Wi-Fi and starts advertising; the Bluetooth scanner then connects.
-        m_switchRequestedTick = m_tick;
-        m_server->RequestSwitchToBluetooth();
-        UpdateTransports(m_server->GetStatus(), m_bluetooth->GetStatus());
+        // The iPhone hangs up and starts advertising; the Bluetooth scanner then connects.
+        RequestSwitch(phomic::Source::Bluetooth);
     }
 
     void MainWindow::SwitchToWiFiButton_Click(winrt::Windows::Foundation::IInspectable const&, RoutedEventArgs const&)
     {
-        // The iPhone stops Bluetooth and connects to this PC over Wi-Fi.
-        m_switchRequestedTick = m_tick;
-        m_bluetooth->RequestSwitchToWiFi();
-        UpdateTransports(m_server->GetStatus(), m_bluetooth->GetStatus());
+        // The iPhone hangs up and connects to this PC over Wi-Fi.
+        RequestSwitch(phomic::Source::WiFi);
+    }
+
+    void MainWindow::SwitchToUsbButton_Click(winrt::Windows::Foundation::IInspectable const&, RoutedEventArgs const&)
+    {
+        // The iPhone hangs up and listens on USB; the USB receiver then connects through the cable.
+        RequestSwitch(phomic::Source::Usb);
+    }
+
+    void MainWindow::UsbToggle_Toggled(winrt::Windows::Foundation::IInspectable const&, RoutedEventArgs const&)
+    {
+        if (!m_initialized)
+        {
+            return;
+        }
+        const bool on = UsbToggle().IsOn();
+        m_usb->SetEnabled(on);
+        phomic::settings::SetInt(phomic::settings::kUsb, on ? 1 : 0);
+        RefreshTransports();
+    }
+
+    void MainWindow::UsbActionButton_Click(winrt::Windows::Foundation::IInspectable const&, RoutedEventArgs const&)
+    {
+        switch (m_usbAction)
+        {
+        case UsbAction::GetAppleDevices:
+            phomic::appleusb::OpenStorePage();
+            break;
+        case UsbAction::StartService:
+            m_usb->StartAppleService();
+            m_usbStartTick = m_tick;
+            RefreshTransports();
+            break;
+        case UsbAction::OpenAppleDevices:
+            // Starting the app starts its USB service; the receiver finds it within a few seconds.
+            phomic::appleusb::OpenAppleDevices();
+            break;
+        case UsbAction::CopyCommand:
+        {
+            winrt::Windows::ApplicationModel::DataTransfer::DataPackage package;
+            package.SetText(m_usbCommand);
+            winrt::Windows::ApplicationModel::DataTransfer::Clipboard::SetContent(package);
+            winrt::Windows::ApplicationModel::DataTransfer::Clipboard::Flush();
+            m_usbCopiedTick = m_tick;
+            RefreshTransports();
+            break;
+        }
+        default:
+            break;
+        }
     }
 }

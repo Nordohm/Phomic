@@ -87,6 +87,7 @@
                             TextWrapping="Wrap" />
                     </StackPanel>
 
+                    <!--  While connected: Disconnect. Otherwise: where to get the iPhone app.  -->
                     <Button
                         x:Name="DisconnectButton"
                         Grid.Column="2"
@@ -94,10 +95,21 @@
                         Click="DisconnectButton_Click"
                         Content="Disconnect"
                         Visibility="Collapsed" />
+                    <!--  Opens the App Store QR code: the app goes on the iPhone, not on this PC  -->
+                    <HyperlinkButton
+                        x:Name="GetIPhoneAppLink"
+                        Grid.Column="2"
+                        Padding="0"
+                        VerticalAlignment="Center"
+                        AutomationProperties.Name="Download Phomic for iPhone on the App Store"
+                        Click="GetIPhoneAppLink_Click"
+                        ToolTipService.ToolTip="Get Phomic for iPhone: scan a code with the iPhone">
+                        <Image x:Name="AppStoreBadge" Height="48" Stretch="Uniform" />
+                    </HyperlinkButton>
                 </Grid>
             </Border>
 
-            <!--  Wi-Fi and Bluetooth, side by side  -->
+            <!--  Wi-Fi, Bluetooth and USB, one above the other  -->
             <Border Style="{StaticResource CardStyle}">
                 <StackPanel Spacing="14">
                     <StackPanel Spacing="2">
@@ -105,7 +117,7 @@
                         <TextBlock
                             Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                             Style="{StaticResource CaptionTextBlockStyle}"
-                            Text="One at a time. Pick Wi-Fi or Bluetooth in Phomic on the iPhone, or switch here while connected."
+                            Text="One at a time. Pick Wi-Fi, Bluetooth or USB in Phomic on the iPhone, or switch here while connected."
                             TextWrapping="Wrap" />
                     </StackPanel>
 
@@ -181,6 +193,50 @@
                             OffContent=""
                             OnContent=""
                             Toggled="BluetoothToggle_Toggled" />
+                    </Grid>
+
+                    <Grid ColumnSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <FontIcon
+                            Width="24"
+                            VerticalAlignment="Center"
+                            FontSize="18"
+                            Glyph="&#xE88E;" />
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock Text="USB" />
+                            <TextBlock
+                                x:Name="UsbText"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Style="{StaticResource CaptionTextBlockStyle}"
+                                TextWrapping="Wrap" />
+                        </StackPanel>
+                        <!--  At most one of these two shows. The second is the fix for what's wrong with USB, if any.  -->
+                        <Button
+                            x:Name="SwitchToUsbButton"
+                            Grid.Column="2"
+                            VerticalAlignment="Center"
+                            Click="SwitchToUsbButton_Click"
+                            Content="Switch here"
+                            Visibility="Collapsed" />
+                        <Button
+                            x:Name="UsbActionButton"
+                            Grid.Column="2"
+                            VerticalAlignment="Center"
+                            Click="UsbActionButton_Click"
+                            Visibility="Collapsed" />
+                        <ToggleSwitch
+                            x:Name="UsbToggle"
+                            Grid.Column="3"
+                            MinWidth="0"
+                            VerticalAlignment="Center"
+                            OffContent=""
+                            OnContent=""
+                            Toggled="UsbToggle_Toggled" />
                     </Grid>
 
                     <!--  A setting for both connections, not a third kind of connection  -->
@@ -349,7 +405,7 @@
                     VerticalAlignment="Center"
                     Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                     Style="{StaticResource CaptionTextBlockStyle}"
-                    Text="Phomic is free and open source."
+                    x:Name="FooterText"
                     TextWrapping="Wrap" />
                 <HyperlinkButton
                     Grid.Column="1"

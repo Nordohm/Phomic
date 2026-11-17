@@ -1,6 +1,10 @@
 import SwiftUI
+import UIKit
 import PhomicActivity
 
+/// One tab per connection (Wi-Fi, Bluetooth, USB) in the tab bar, Liquid Glass on iOS 26.
+/// Picking a tab picks the connection, as the switch at the top did: while live, the session
+/// moves over to it.
 struct ContentView: View {
     @Environment(MicController.self) private var model
     @State private var pairingCode = ""
@@ -9,48 +13,138 @@ struct ContentView: View {
     var body: some View {
         @Bindable var model = model
 
-        NavigationStack {
-            List {
-                Section {
-                    Picker("Connection", selection: $model.preferredTransport) {
-                        ForEach(MicController.Transport.allCases) { transport in
-                            Text(transport.title).tag(transport)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .listRowBackground(Color.clear)
-                    .listRowInsets(EdgeInsets())
-                }
-
-                if model.isActive {
-                    Section {
-                        LiveCard()
-                        Button {
-                            model.showSystemMicModes()
-                        } label: {
-                            LabeledContent("Processing", value: model.systemMicMode ?? "—")
-                        }
-                        .disabled(!model.canShowMicModes)
-                    }
-                }
-
-                if let error = model.lastError {
-                    Section {
-                        Label(error, systemImage: "exclamationmark.triangle.fill")
-                            .foregroundStyle(.orange)
-                    }
-                }
-
-                if !model.isActive {
-                    switch model.preferredTransport {
-                    case .wifi:
-                        ComputersSection()
-                    case .bluetooth:
-                        NearbyComputersSection()
-                    }
+        TabView(selection: $model.preferredTransport) {
+            Tab("Wi-Fi", systemImage: "wifi", value: MicController.Transport.wifi) {
+                ConnectionScreen(transport: .wifi, showSettings: $showSettings)
+            }
+            Tab(value: MicController.Transport.bluetooth) {
+                ConnectionScreen(transport: .bluetooth, showSettings: $showSettings)
+            } label: {
+                Label {
+                    Text("Bluetooth")
+                } icon: {
+                    Image(uiImage: BluetoothGlyph.image)
                 }
             }
-            .navigationTitle("Phomic")
+            Tab("USB", systemImage: "cable.connector", value: MicController.Transport.usb) {
+                ConnectionScreen(transport: .usb, showSettings: $showSettings)
+            }
+        }
+        .sensoryFeedback(.selection, trigger: model.preferredTransport)
+        .sheet(isPresented: $showSettings) {
+            SettingsView()
+        }
+        .alert(
+            "Pairing code",
+            isPresented: Binding(
+                get: { model.pairingPrompt != nil },
+                set: { if !$0 { model.cancelPairing() } }
+            ),
+            presenting: model.pairingPrompt
+        ) { _ in
+            TextField("4 digits", text: $pairingCode)
+                .keyboardType(.numberPad)
+            Button("Connect") {
+                model.submitPairingCode(pairingCode)
+                pairingCode = ""
+            }
+            Button("Cancel", role: .cancel) {
+                model.cancelPairing()
+                pairingCode = ""
+            }
+        } message: { prompt in
+            Text(prompt.wrongCode
+                 ? "Wrong code. It's shown in Phomic on \(prompt.pcName)."
+                 : "It's shown in Phomic on \(prompt.pcName).")
+        }
+    }
+}
+
+/// The Bluetooth rune as a template image: tab bar icons have to be images, and SF Symbols
+/// has no Bluetooth logo.
+@MainActor
+private enum BluetoothGlyph {
+    static let image: UIImage = {
+        let renderer = ImageRenderer(content: Rune())
+        renderer.scale = 3
+        return (renderer.uiImage ?? UIImage()).withRenderingMode(.alwaysTemplate)
+    }()
+
+    private struct Rune: View {
+        var body: some View {
+            BluetoothRune()
+                .stroke(style: StrokeStyle(lineWidth: 2.4, lineCap: .round, lineJoin: .round))
+                .foregroundStyle(.black)
+                .frame(width: 26, height: 26)
+        }
+    }
+}
+
+/// What one tab shows: the live session, or how to connect over that transport.
+private struct ConnectionScreen: View {
+    let transport: MicController.Transport
+    @Binding var showSettings: Bool
+    @Environment(MicController.self) private var model
+
+    private var isStreaming: Bool {
+        if case .streaming = model.phase { return true }
+        return false
+    }
+
+    private static let verticalPadding: CGFloat = 32
+
+    var body: some View {
+        NavigationStack {
+            // Centered on the screen: the live screen around the mute button exactly, the rest as
+            // a group (a long list of PCs scrolls instead). The top bar (with the status bar) is
+            // taller than the tab bar, so centering between the two would sit a little low;
+            // instead the content keeps the same margin, the larger of the two, top and bottom.
+            GeometryReader { screen in
+                let margin = max(screen.safeAreaInsets.top, screen.safeAreaInsets.bottom)
+                let height = max(0, screen.size.height - 2 * margin)
+                ScrollView {
+                    VStack(spacing: 24) {
+                        Group {
+                            if model.isActive {
+                                LiveView()
+                                    .frame(height: max(0, height - Self.verticalPadding))
+                            } else {
+                                if let error = model.lastError {
+                                    ErrorCard(message: error)
+                                        .transition(.opacity)
+                                }
+                                switch transport {
+                                case .wifi:
+                                    WiFiComputers()
+                                case .bluetooth:
+                                    BluetoothComputers()
+                                case .usb:
+                                    UsbWaiting()
+                                }
+                            }
+                        }
+                        .transition(.opacity)
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, Self.verticalPadding / 2)
+                    .frame(minHeight: height)
+                    .padding(.vertical, margin)
+                    .animation(.snappy, value: model.isActive)
+                    .animation(.snappy, value: model.lastError)
+                }
+            }
+            // The whole screen, so `screen` knows the bars; the margins above keep content clear
+            // of them (and long lists scroll on under the glass).
+            .ignoresSafeArea(.container, edges: .vertical)
+            // Scroll only when there's more than fits, e.g. a long list of PCs.
+            .scrollBounceBehavior(.basedOnSize)
+            .backgroundPreferenceValue(MicButtonKey.self) { button in
+                if let button, model.isActive {
+                    VoiceGlow(button: button, level: model.level,
+                              isLive: isStreaming && !model.isMuted, isMuted: isStreaming && model.isMuted)
+                }
+            }
+            .background(Color(.systemGroupedBackground))
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
@@ -61,68 +155,136 @@ struct ContentView: View {
                     .accessibilityLabel("Settings")
                 }
             }
-            .sheet(isPresented: $showSettings) {
-                SettingsView()
-            }
-            .alert(
-                "Pairing code",
-                isPresented: Binding(
-                    get: { model.pairingPrompt != nil },
-                    set: { if !$0 { model.cancelPairing() } }
-                ),
-                presenting: model.pairingPrompt
-            ) { _ in
-                TextField("4 digits", text: $pairingCode)
-                    .keyboardType(.numberPad)
-                Button("Connect") {
-                    model.submitPairingCode(pairingCode)
-                    pairingCode = ""
-                }
-                Button("Cancel", role: .cancel) {
-                    model.cancelPairing()
-                    pairingCode = ""
-                }
-            } message: { prompt in
-                Text(prompt.wrongCode
-                     ? "Wrong code. It's shown in Phomic on \(prompt.pcName)."
-                     : "It's shown in Phomic on \(prompt.pcName).")
-            }
         }
+    }
+}
+
+// MARK: - Building blocks
+
+private extension View {
+    /// A rounded tile on the grouped background, like the rows of a list.
+    func card() -> some View {
+        padding(.horizontal, 16)
+            .padding(.vertical, 14)
+            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    /// Liquid Glass buttons on iOS 26, bordered ones before.
+    @ViewBuilder
+    func glassButton(prominent: Bool = false) -> some View {
+        if #available(iOS 26, *) {
+            if prominent {
+                buttonStyle(.glassProminent)
+            } else {
+                buttonStyle(.glass)
+            }
+        } else if prominent {
+            buttonStyle(.borderedProminent)
+        } else {
+            buttonStyle(.bordered)
+        }
+    }
+}
+
+/// Shrinks a little while pressed; for buttons that draw their own background.
+private struct PressableStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .opacity(configuration.isPressed ? 0.85 : 1)
+            .animation(.snappy(duration: 0.15), value: configuration.isPressed)
+    }
+}
+
+private struct ErrorCard: View {
+    let message: String
+
+    var body: some View {
+        Label {
+            Text(message)
+                .font(.subheadline)
+        } icon: {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 }
 
 // MARK: - Live session
 
-private struct LiveCard: View {
+private struct LiveView: View {
     @Environment(MicController.self) private var model
 
     var body: some View {
-        VStack(spacing: 16) {
-            VStack(spacing: 4) {
+        VStack(spacing: 0) {
+            VStack(spacing: 8) {
+                if let error = model.lastError {
+                    ErrorCard(message: error)
+                        .padding(.bottom, 8)
+                }
                 Text(title)
-                    .font(.headline)
-                if let subtitle {
-                    Text(subtitle)
+                    .font(.title2.weight(.semibold))
+                    .multilineTextAlignment(.center)
+                if let chip {
+                    Label(chip, systemImage: "desktopcomputer")
+                        .font(.footnote.weight(.medium))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(Color(.tertiarySystemFill), in: Capsule())
+                }
+                if let note {
+                    Text(note)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                 }
             }
+            .accessibilityElement(children: .combine)
+            .frame(maxHeight: .infinity, alignment: .bottom)
+            .padding(.bottom, 32)
 
+            // The two halves around it share the height equally, so it sits in the middle.
             MuteButton(isMuted: model.isMuted, isLive: isStreaming) {
                 model.isMuted.toggle()
             }
 
-            LevelMeter(level: model.level, dimmed: model.isMuted || !isStreaming)
-                .padding(.horizontal, 24)
+            VStack(spacing: 18) {
+                // The iPhone's Mic Mode (Standard / Voice Isolation / Wide Spectrum): opens the system picker.
+                Button {
+                    model.showSystemMicModes()
+                } label: {
+                    Label(model.systemMicMode ?? "Mic Mode", systemImage: "waveform")
+                        .font(.subheadline.weight(.medium))
+                }
+                .glassButton()
+                .disabled(!model.canShowMicModes)
+                .accessibilityLabel("Processing: \(model.systemMicMode ?? "not recording")")
 
-            Button("Disconnect", role: .destructive) {
-                model.disconnect()
+                if model.transport == .usb {
+                    // A cable is plugged in or not: no Disconnect, like a wired microphone.
+                    if isStreaming {
+                        Text("Unplug the cable to stop.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                } else {
+                    // Plain, not glass: glass is for the iPhone's own Mic Mode button above.
+                    Button("Disconnect", role: .destructive) {
+                        model.disconnect()
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(.red)
+                    .controlSize(.large)
+                }
             }
-            .buttonStyle(.bordered)
+            .frame(maxHeight: .infinity, alignment: .top)
+            .padding(.top, 32)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 12)
     }
 
     private var isStreaming: Bool {
@@ -130,30 +292,53 @@ private struct LiveCard: View {
         return false
     }
 
+    /// One word or two; the PC's name goes in the chip below, so long names don't wrap.
     private var title: String {
         switch model.phase {
-        case .idle: ""
-        case .connecting(let name): "Connecting to \(name)…"
-        case .streaming(let name): model.isMuted ? "Muted" : "Live on \(name)"
-        case .reconnecting(let name): "Reconnecting to \(name)…"
+        case .idle: return ""
+        case .connecting: return "Connecting…"
+        case .streaming: return model.isMuted ? "Muted" : "Live"
+        case .reconnecting: return model.transport == .usb ? "Unplugged" : "Reconnecting…"
         }
     }
 
-    private var subtitle: String? {
-        switch model.phase {
-        case .streaming:
-            if model.transport == .bluetooth {
-                if let rate = model.bluetoothSampleRate { return "Bluetooth · \(rate / 1000) kHz" }
-                return "Bluetooth"
-            }
-            if let rtt = model.roundTripMs { return "Wi-Fi · \(Int(rtt.rounded())) ms" }
-            return "Wi-Fi"
-        default:
-            return nil
+    /// Which PC, and how well: "ATT-DESKTOP · 4 ms", "ATT-DESKTOP · 48 kHz". The tab it's on
+    /// already says Wi-Fi, Bluetooth or USB.
+    private var chip: String? {
+        var parts: [String] = []
+        if let name = pcName {
+            parts.append(name)
         }
+        if isStreaming {
+            if model.transport == .bluetooth {
+                if let rate = model.bluetoothSampleRate { parts.append("\(rate / 1000) kHz") }
+            } else if let rtt = model.roundTripMs {
+                parts.append("\(Int(rtt.rounded())) ms")
+            }
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    /// The PC's name, once known (over USB the PC says who it is when it connects).
+    private var pcName: String? {
+        let name: String
+        switch model.phase {
+        case .idle: return nil
+        case .connecting(let n), .streaming(let n), .reconnecting(let n): name = n
+        }
+        return name == "your PC" ? nil : name
+    }
+
+    private var note: String? {
+        if case .reconnecting = model.phase, model.transport == .usb {
+            return "Plug the cable back in."
+        }
+        return nil
     }
 }
 
+/// The big mute button. Your voice shows in the background behind it (VoiceGlow), which
+/// finds the button through MicButtonKey.
 private struct MuteButton: View {
     let isMuted: Bool
     let isLive: Bool
@@ -161,15 +346,20 @@ private struct MuteButton: View {
 
     var body: some View {
         Button(action: action) {
-            Image(systemName: isMuted ? "mic.slash.fill" : "mic.fill")
-                .font(.system(size: 64, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(width: 168, height: 168)
-                .background(Circle().fill(color))
-                .contentTransition(.symbolEffect(.replace))
-                .animation(.easeInOut(duration: 0.2), value: isMuted)
+            ZStack {
+                Circle()
+                    .fill(color)
+                    .anchorPreference(key: MicButtonKey.self, value: .bounds) { $0 }
+                Image(systemName: isMuted ? "mic.slash.fill" : "mic.fill")
+                    .font(.system(size: 60, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .contentTransition(.symbolEffect(.replace))
+            }
+            .frame(width: 172, height: 172)
+            .animation(.snappy(duration: 0.12), value: isMuted) // quick, so a tap feels instant
+            .animation(.easeInOut(duration: 0.2), value: isLive)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressableStyle())
         .sensoryFeedback(.impact, trigger: isMuted)
         .accessibilityLabel(isMuted ? "Unmute" : "Mute")
     }
@@ -177,119 +367,316 @@ private struct MuteButton: View {
     /// Red: muted. Green: live. Gray: not connected yet.
     private var color: Color {
         if isMuted { return .red }
-        return isLive ? .green : .gray
+        return isLive ? .green : Color(.systemGray3)
     }
 }
 
-private struct LevelMeter: View {
+/// Where the mute button is, for the glow behind the whole screen.
+private struct MicButtonKey: PreferenceKey {
+    static let defaultValue: Anchor<CGRect>? = nil
+    static func reduce(value: inout Anchor<CGRect>?, nextValue: () -> Anchor<CGRect>?) {
+        value = nextValue() ?? value
+    }
+}
+
+/// Your voice as light: a gradient from the mute button's edge out to the screen's edges, which
+/// brightens and reaches further while you talk and settles when you're quiet. It rises fast and
+/// fades slowly, so it breathes rather than flickers. Red when the sound clips; a still, faint
+/// red while muted.
+///
+/// It's drawn every frame from the latest level (TimelineView), not when the level changes: in
+/// silence the level stays at the same value, and a glow that only moved on changes would stop
+/// wherever it was.
+private struct VoiceGlow: View {
+    let button: Anchor<CGRect>
     let level: Float
-    let dimmed: Bool
+    let isLive: Bool
+    let isMuted: Bool
+
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var smoother = GlowSmoother()
 
     var body: some View {
-        GeometryReader { proxy in
-            ZStack(alignment: .leading) {
-                Capsule().fill(.quaternary)
-                Capsule()
-                    .fill(dimmed ? Color.secondary : (level > 0.97 ? Color.red : Color.green))
-                    .frame(width: proxy.size.width * CGFloat(level))
+        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !isLive)) { context in
+            let glow = smoother.next(toward: isLive ? target : 0, at: context.date)
+            GeometryReader { proxy in
+                let rect = proxy[button]
+                let size = proxy.size
+                let center = CGPoint(x: rect.midX, y: rect.midY)
+                // Out to the farthest corner, so the whole screen is in it.
+                let far = [CGPoint.zero, CGPoint(x: size.width, y: 0), CGPoint(x: 0, y: size.height),
+                           CGPoint(x: size.width, y: size.height)]
+                    .map { hypot($0.x - center.x, $0.y - center.y) }
+                    .max() ?? 1
+                let amount = amount(glow)
+                RadialGradient(
+                    stops: [
+                        .init(color: tint.opacity(amount), location: 0),
+                        .init(color: tint.opacity(amount * 0.35), location: middle(glow)),
+                        .init(color: tint.opacity(0), location: 1),
+                    ],
+                    center: UnitPoint(x: center.x / max(size.width, 1), y: center.y / max(size.height, 1)),
+                    startRadius: rect.width / 2,
+                    endRadius: max(far, rect.width / 2 + 1)
+                )
             }
         }
-        .frame(height: 8)
-        .animation(.linear(duration: 0.08), value: level)
+        .ignoresSafeArea()
+        .opacity(isLive || isMuted ? 1 : 0)
+        .animation(.easeInOut(duration: 0.4), value: isLive)
+        .animation(.easeInOut(duration: 0.4), value: isMuted)
+        .allowsHitTesting(false)
         .accessibilityHidden(true)
+    }
+
+    /// Where the glow is heading, 0...1. `level` is -60...0 dB as 0...1. A room's own noise sits
+    /// around -45 dB (0.25) and talking at arm's length around -30 to -20 dB, so -45 dB is dark
+    /// and -21 dB full.
+    private var target: CGFloat {
+        reduceMotion ? 0.4 : CGFloat(min(1, max(0, (level - 0.25) / 0.4)))
+    }
+
+    /// The same color reads stronger on black (it's the only light there) than as a tint on
+    /// a light background, so dark mode gets less of it.
+    private var strength: Double { colorScheme == .dark ? 0.34 : 0.6 }
+
+    /// Square root: ordinary talking already shows well; shouting only adds a little more.
+    private func amount(_ glow: CGFloat) -> Double {
+        isMuted ? strength * 0.35 : strength * (0.15 + 0.85 * sqrt(Double(glow)))
+    }
+
+    private func middle(_ glow: CGFloat) -> Double {
+        isMuted ? 0.22 : 0.2 + 0.4 * sqrt(Double(glow))
+    }
+
+    private var tint: Color {
+        isMuted || level > 0.97 ? .red : .green
+    }
+}
+
+/// Eases the glow toward its target over time: up in about 0.1 s, down in about 0.7 s.
+/// A class, so the frame-by-frame value can change while the view is drawn.
+private final class GlowSmoother {
+    private var value: CGFloat = 0
+    private var last: Date?
+
+    func next(toward target: CGFloat, at now: Date) -> CGFloat {
+        let elapsed = min(0.1, max(0, last.map { now.timeIntervalSince($0) } ?? 0))
+        last = now
+        let timeConstant = target > value ? 0.08 : 0.7
+        value += (target - value) * CGFloat(1 - exp(-elapsed / timeConstant))
+        return value
     }
 }
 
 // MARK: - Choosing a PC
 
-private struct ComputerRow: View {
+/// The microphone emblem above the list, with rings going out while Phomic looks for PCs.
+private struct Hero: View {
+    let title: String
+    let subtitle: String?
+    let searching: Bool
+
+    var body: some View {
+        VStack(spacing: 10) {
+            ZStack {
+                if searching {
+                    PulseRings()
+                }
+                Circle()
+                    .fill(Color.accentColor.opacity(0.14))
+                    .frame(width: 88, height: 88)
+                Image(systemName: "mic.fill")
+                    .font(.system(size: 34, weight: .semibold))
+                    .foregroundStyle(Color.accentColor)
+            }
+            .frame(width: 150, height: 150)
+            VStack(spacing: 4) {
+                Text(title)
+                    .font(.title3.weight(.semibold))
+                if let subtitle {
+                    Text(subtitle)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+private struct PulseRings: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: nil, paused: reduceMotion)) { context in
+            let time = context.date.timeIntervalSinceReferenceDate
+            ZStack {
+                ForEach(0..<2, id: \.self) { ring in
+                    let phase = (time / 2.4 + Double(ring) / 2).truncatingRemainder(dividingBy: 1)
+                    Circle()
+                        .stroke(Color.accentColor.opacity(0.35 * (1 - phase)), lineWidth: 1.5)
+                        .frame(width: 88 + 62 * phase, height: 88 + 62 * phase)
+                }
+            }
+        }
+        .accessibilityHidden(true)
+    }
+}
+
+private struct PCCard: View {
     let name: String
-    let bluetooth: Bool
+    let transport: TransportKind
     let requiresCode: Bool
+    let action: () -> Void
 
     var body: some View {
-        HStack {
-            Label {
+        Button(action: action) {
+            HStack(spacing: 14) {
+                Group {
+                    if transport == .bluetooth {
+                        TransportIcon(transport: .bluetooth, size: 22)
+                    } else {
+                        Image(systemName: "desktopcomputer")
+                            .font(.system(size: 18, weight: .medium))
+                    }
+                }
+                .foregroundStyle(Color.accentColor)
+                .frame(width: 40, height: 40)
+                .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+
                 Text(name)
-            } icon: {
-                if bluetooth {
-                    TransportIcon(bluetooth: true, size: 22)
-                } else {
-                    Image(systemName: "desktopcomputer")
+                    .font(.body.weight(.medium))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                Spacer(minLength: 8)
+                if requiresCode {
+                    Image(systemName: "lock.fill")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .accessibilityLabel("Needs a pairing code")
                 }
+                Image(systemName: "chevron.right")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+                    .accessibilityHidden(true)
             }
-            Spacer()
-            if requiresCode {
-                Image(systemName: "lock.fill")
-                    .foregroundStyle(.secondary)
-                    .accessibilityLabel("Needs a pairing code")
-            }
+            .card()
+            .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
+        .buttonStyle(PressableStyle())
     }
 }
 
-private struct SearchingRow: View {
-    var body: some View {
-        HStack(spacing: 12) {
-            ProgressView()
-            Text("Looking for PCs…")
-                .foregroundStyle(.secondary)
-        }
-    }
-}
-
-private struct ComputersSection: View {
+private struct WiFiComputers: View {
     @Environment(MicController.self) private var model
 
     var body: some View {
-        Section {
-            if model.servers.isEmpty {
-                SearchingRow()
-            } else {
+        VStack(spacing: 18) {
+            Hero(title: model.servers.isEmpty ? "Looking for PCs…" : "Pick your PC",
+                 subtitle: model.browseProblem ?? "On this Wi-Fi network",
+                 searching: model.servers.isEmpty)
+            VStack(spacing: 10) {
                 ForEach(model.servers) { server in
-                    Button {
+                    PCCard(name: server.name, transport: .wifi, requiresCode: server.requiresCode) {
                         model.connect(to: server)
-                    } label: {
-                        ComputerRow(name: server.name, bluetooth: false, requiresCode: server.requiresCode)
                     }
                 }
             }
-            NavigationLink("Connect by Address") {
+            NavigationLink {
                 ManualConnectView()
-            }
-        } header: {
-            Text("Computers")
-        } footer: {
-            if let problem = model.browseProblem {
-                Text(problem)
+            } label: {
+                Label("Connect by Address", systemImage: "keyboard")
+                    .font(.subheadline.weight(.medium))
             }
         }
     }
 }
 
-private struct NearbyComputersSection: View {
+private struct BluetoothComputers: View {
     @Environment(MicController.self) private var model
 
     var body: some View {
-        Section {
-            if model.nearbyPCs.isEmpty {
-                SearchingRow()
-            } else {
+        VStack(spacing: 18) {
+            Hero(title: model.nearbyPCs.isEmpty ? "Looking for PCs…" : "Pick your PC",
+                 subtitle: model.bluetoothProblem ?? "Nearby, over Bluetooth",
+                 searching: model.nearbyPCs.isEmpty)
+            VStack(spacing: 10) {
                 ForEach(model.nearbyPCs) { pc in
-                    Button {
+                    PCCard(name: pc.name, transport: .bluetooth, requiresCode: pc.requiresCode) {
                         model.connect(to: pc)
-                    } label: {
-                        ComputerRow(name: pc.name, bluetooth: true, requiresCode: pc.requiresCode)
                     }
                 }
             }
-        } header: {
-            Text("Computers")
-        } footer: {
-            if let problem = model.bluetoothProblem {
-                Text(problem)
+        }
+    }
+}
+
+/// USB: the iPhone waits, and the PC connects through the cable by itself.
+private struct UsbWaiting: View {
+    @Environment(MicController.self) private var model
+
+    var body: some View {
+        VStack(spacing: 20) {
+            CableIllustration(waiting: !model.usbPaused)
+            VStack(spacing: 4) {
+                Text(model.usbPaused ? "Not waiting for a PC" : "Waiting for your PC")
+                    .font(.title3.weight(.semibold))
+                Text("Plug this iPhone into a PC running Phomic.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            .accessibilityElement(children: .combine)
+            if model.usbPaused {
+                Button {
+                    model.connectOverUsb()
+                } label: {
+                    Text("Connect")
+                        .frame(minWidth: 140)
+                }
+                .glassButton(prominent: true)
+                .controlSize(.large)
             }
         }
+        .frame(maxWidth: .infinity)
+    }
+}
+
+/// iPhone, a cable of dots, PC. The dots run while the iPhone waits.
+private struct CableIllustration: View {
+    let waiting: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        HStack(spacing: 14) {
+            tile("iphone", highlighted: true)
+            TimelineView(.periodic(from: .now, by: 0.35)) { context in
+                let step = Int(context.date.timeIntervalSinceReferenceDate / 0.35) % 3
+                HStack(spacing: 8) {
+                    ForEach(0..<3, id: \.self) { dot in
+                        Circle()
+                            .fill(Color.accentColor)
+                            .frame(width: 7, height: 7)
+                            .opacity(!waiting ? 0.25 : reduceMotion ? 0.6 : (dot == step ? 1 : 0.3))
+                    }
+                }
+            }
+            tile("desktopcomputer", highlighted: false)
+        }
+        .accessibilityHidden(true)
+    }
+
+    private func tile(_ symbol: String, highlighted: Bool) -> some View {
+        Image(systemName: symbol)
+            .font(.system(size: 28, weight: .medium))
+            .foregroundStyle(highlighted ? Color.accentColor : Color.secondary)
+            .frame(width: 72, height: 72)
+            .background(highlighted ? Color.accentColor.opacity(0.12) : Color(.secondarySystemGroupedBackground),
+                        in: RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 }
 
@@ -337,6 +724,10 @@ private struct ManualConnectView: View {
 // MARK: - Settings
 
 private struct SettingsView: View {
+    /// The installed version, e.g. "1.1.0", from the app's Info.plist (MARKETING_VERSION on
+    /// App Store builds), so it never needs updating here.
+    static let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
+
     @Environment(MicController.self) private var model
     @Environment(\.dismiss) private var dismiss
     @State private var confirmForgetAll = false
@@ -348,13 +739,11 @@ private struct SettingsView: View {
             List {
                 Section {
                     Toggle("Live Activity", isOn: $model.liveActivityEnabled)
-                } footer: {
-                    Text("Lock Screen and Dynamic Island while connected, with a mute button.")
                 }
 
                 Section {
                     if model.savedPairings.isEmpty {
-                        Text("None saved")
+                        Text("None yet")
                             .foregroundStyle(.secondary)
                     } else {
                         ForEach(model.savedPairings) { pairing in
@@ -367,16 +756,16 @@ private struct SettingsView: View {
                         }
                     }
                 } header: {
-                    Text("Pairing codes")
+                    Text("Paired PCs")
                 } footer: {
-                    if !model.savedPairings.isEmpty {
-                        Text("Swipe to forget a code. Phomic asks again next time.")
-                    }
+                    Text(model.savedPairings.isEmpty
+                         ? "PCs that ask for a pairing code show up here once you've entered it."
+                         : "Swipe to forget a PC. Phomic asks for its code again next time.")
                 }
 
                 if !model.savedPairings.isEmpty {
                     Section {
-                        Button("Forget All Codes", role: .destructive) {
+                        Button("Forget All PCs", role: .destructive) {
                             confirmForgetAll = true
                         }
                     }
@@ -386,8 +775,11 @@ private struct SettingsView: View {
                     NavigationLink("Acknowledgements") {
                         AcknowledgementsView()
                     }
+                } footer: {
+                    Text("Phomic \(Self.version)")
                 }
             }
+            .scrollBounceBehavior(.basedOnSize)
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -395,7 +787,7 @@ private struct SettingsView: View {
                     Button("Done") { dismiss() }
                 }
             }
-            .confirmationDialog("Forget all pairing codes?", isPresented: $confirmForgetAll, titleVisibility: .visible) {
+            .confirmationDialog("Forget all paired PCs?", isPresented: $confirmForgetAll, titleVisibility: .visible) {
                 Button("Forget All", role: .destructive) {
                     model.forgetAllPairings()
                 }

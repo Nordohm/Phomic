@@ -5,6 +5,11 @@
 // The first icon is also what Explorer shows for Phomic.exe.
 IDI_PHOMIC ICON "Assets\\Phomic.ico"
 
+// Apple's App Store badge, linking to Phomic for iPhone (Apple's artwork, from its marketing guidelines).
+IDR_BADGE_BLACK RCDATA "Assets\\AppStoreBadge-Black.svg"
+IDR_BADGE_WHITE RCDATA "Assets\\AppStoreBadge-White.svg"
+IDR_APPSTORE_QR RCDATA "Assets\\AppStoreQrCode.jpg"
+
 VS_VERSION_INFO VERSIONINFO
  FILEVERSION PHOMIC_VERSION_MAJOR, PHOMIC_VERSION_MINOR, PHOMIC_VERSION_PATCH, 0
  PRODUCTVERSION PHOMIC_VERSION_MAJOR, PHOMIC_VERSION_MINOR, PHOMIC_VERSION_PATCH, 0

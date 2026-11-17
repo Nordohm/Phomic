@@ -16,6 +16,12 @@ import os
 ///
 /// All state lives on `queue` (also the CoreBluetooth delegate queue).
 final class BluetoothLink: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, @unchecked Sendable {
+    /// Each step of finding and talking to the PC, for the device log (Console.app, or
+    /// `idevicesyslog -m Phomic`): a Bluetooth link that won't come up is otherwise a black box.
+    private static let log = Logger(subsystem: "io.github.nordohm.Phomic", category: "Bluetooth")
+
+    private static func short(_ id: UUID) -> String { String(id.uuidString.prefix(8)) }
+
     enum Event: Sendable {
         /// Looking for the PC or connecting to it.
         case connecting
@@ -94,6 +100,7 @@ final class BluetoothLink: NSObject, CBCentralManagerDelegate, CBPeripheralDeleg
     /// Connect to the PC with this id. `hint`: the peripheral its announcement came from.
     func start(target: String, name: String, hint: UUID?, code: String?) {
         queue.async {
+            Self.log.notice("start: PC \(target, privacy: .public), hint \(hint.map(Self.short) ?? "none", privacy: .public)")
             self.hangUp()
             self.session += 1
             self.wanted = true
@@ -114,6 +121,7 @@ final class BluetoothLink: NSObject, CBCentralManagerDelegate, CBPeripheralDeleg
     func stop() {
         queue.async {
             guard self.wanted else { return }
+            Self.log.notice("stop")
             self.wanted = false
             self.session += 1
             let session = self.session
@@ -175,6 +183,7 @@ final class BluetoothLink: NSObject, CBCentralManagerDelegate, CBPeripheralDeleg
         var ids: [UUID] = []
         if let known = knownPeripherals[targetId] { ids.append(known) }
         if let hint, !ids.contains(hint) { ids.append(hint) }
+        Self.log.notice("connecting: \(ids.count) known peripheral(s), scanning for the PC's service")
         for candidate in central.retrievePeripherals(withIdentifiers: ids) {
             connect(candidate)
         }
@@ -188,6 +197,7 @@ final class BluetoothLink: NSObject, CBCentralManagerDelegate, CBPeripheralDeleg
               peripheral?.identifier != candidate.identifier else { return }
         candidates[candidate.identifier] = candidate
         candidate.delegate = self
+        Self.log.notice("connect to \(Self.short(candidate.identifier), privacy: .public)")
         central.connect(candidate, options: nil)
     }
 
@@ -233,6 +243,7 @@ final class BluetoothLink: NSObject, CBCentralManagerDelegate, CBPeripheralDeleg
     // MARK: - CBCentralManagerDelegate
 
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
+        Self.log.notice("Bluetooth state \(central.state.rawValue)")
         switch central.state {
         case .poweredOn:
             connectIfPossible(central)
@@ -261,10 +272,12 @@ final class BluetoothLink: NSObject, CBCentralManagerDelegate, CBPeripheralDeleg
 
     func centralManager(_ central: CBCentralManager, didDiscover found: CBPeripheral,
                         advertisementData: [String: Any], rssi RSSI: NSNumber) {
+        Self.log.notice("found \(Self.short(found.identifier), privacy: .public), RSSI \(RSSI.intValue)")
         connect(found)
     }
 
     func centralManager(_ central: CBCentralManager, didConnect connected: CBPeripheral) {
+        Self.log.notice("connected to \(Self.short(connected.identifier), privacy: .public)")
         guard wanted, !serviceUUIDs.isEmpty else {
             central.cancelPeripheralConnection(connected)
             return
@@ -274,6 +287,7 @@ final class BluetoothLink: NSObject, CBCentralManagerDelegate, CBPeripheralDeleg
     }
 
     func centralManager(_ central: CBCentralManager, didFailToConnect failed: CBPeripheral, error: Error?) {
+        Self.log.notice("failed to connect to \(Self.short(failed.identifier), privacy: .public): \(error?.localizedDescription ?? "-", privacy: .public)")
         candidates[failed.identifier] = nil
         guard wanted, failed.identifier == peripheral?.identifier else { return }
         // Try the PC again in a moment.
@@ -285,6 +299,7 @@ final class BluetoothLink: NSObject, CBCentralManagerDelegate, CBPeripheralDeleg
     }
 
     func centralManager(_ central: CBCentralManager, didDisconnectPeripheral gone: CBPeripheral, error: Error?) {
+        Self.log.notice("disconnected from \(Self.short(gone.identifier), privacy: .public) (the PC: \(gone.identifier == self.peripheral?.identifier), live: \(self.welcomed)): \(error?.localizedDescription ?? "-", privacy: .public)")
         if candidates.removeValue(forKey: gone.identifier) != nil {
             return
         }
@@ -313,6 +328,7 @@ final class BluetoothLink: NSObject, CBCentralManagerDelegate, CBPeripheralDeleg
     func peripheral(_ device: CBPeripheral, didDiscoverServices error: Error?) {
         guard wanted, !serviceUUIDs.isEmpty else { return }
         guard let service = device.services?.first(where: { serviceUUIDs.contains($0.uuid) }) else {
+            Self.log.notice("no Phomic service on \(Self.short(device.identifier), privacy: .public): \(error?.localizedDescription ?? "-", privacy: .public)")
             if candidates[device.identifier] != nil {
                 // Not the PC we want (or Phomic isn't running there): let it go.
                 candidates[device.identifier] = nil
@@ -332,6 +348,7 @@ final class BluetoothLink: NSObject, CBCentralManagerDelegate, CBPeripheralDeleg
             }
             return
         }
+        Self.log.notice("the PC is \(Self.short(device.identifier), privacy: .public)")
         adopt(device)
         startHandshakeWatchdog(for: device)
         device.discoverCharacteristics([Self.audioUUID, Self.controlUUID], for: service)
@@ -363,6 +380,7 @@ final class BluetoothLink: NSObject, CBCentralManagerDelegate, CBPeripheralDeleg
 
     func peripheral(_ device: CBPeripheral, didUpdateNotificationStateFor characteristic: CBCharacteristic, error: Error?) {
         guard wanted, device.identifier == peripheral?.identifier, characteristic.uuid == Self.controlUUID else { return }
+        Self.log.notice("subscribed: \(characteristic.isNotifying), \(error?.localizedDescription ?? "-", privacy: .public)")
         if error != nil || !characteristic.isNotifying {
             central?.cancelPeripheralConnection(device) // reconnects by itself
             return
@@ -371,6 +389,7 @@ final class BluetoothLink: NSObject, CBCentralManagerDelegate, CBPeripheralDeleg
     }
 
     private func sendHello() {
+        Self.log.notice("hello")
         var hello: [String: Any] = ["type": "hello", "v": 2, "name": deviceName, "muted": muted]
         if let code {
             hello["code"] = code
@@ -386,10 +405,12 @@ final class BluetoothLink: NSObject, CBCentralManagerDelegate, CBPeripheralDeleg
         let id = device.identifier
         queue.asyncAfter(deadline: .now() + 2.5) {
             guard self.isStuck(handshake, id), self.control?.isNotifying == true else { return }
+            Self.log.notice("no welcome after 2.5 s: hello again")
             self.sendHello()
         }
         queue.asyncAfter(deadline: .now() + 7) {
             guard self.isStuck(handshake, id), let peripheral = self.peripheral else { return }
+            Self.log.notice("no welcome after 7 s: starting over")
             // didDisconnect keeps a pending connection and looks for the PC again.
             self.central?.cancelPeripheralConnection(peripheral)
         }
@@ -404,6 +425,7 @@ final class BluetoothLink: NSObject, CBCentralManagerDelegate, CBPeripheralDeleg
               let value = characteristic.value,
               let message = try? JSONSerialization.jsonObject(with: value) as? [String: Any],
               let type = message["type"] as? String else { return }
+        Self.log.notice("from the PC: \(type, privacy: .public)")
         switch type {
         case "welcome":
             pcName = (message["name"] as? String) ?? pcName

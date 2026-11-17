@@ -1,26 +1,39 @@
 import SwiftUI
 
-/// Wi-Fi or Bluetooth, as an icon. SF Symbols has no Bluetooth logo, so that one is drawn.
+/// How the iPhone reaches the PC. Shared by the app and the Live Activity.
+public enum TransportKind: String, Codable, Hashable, Sendable {
+    case wifi
+    case bluetooth
+    case usb
+}
+
+/// Wi-Fi, Bluetooth or USB, as an icon. SF Symbols has no Bluetooth logo, so that one is drawn.
 public struct TransportIcon: View {
-    let bluetooth: Bool
+    let transport: TransportKind
     let size: CGFloat
 
-    public init(bluetooth: Bool, size: CGFloat) {
-        self.bluetooth = bluetooth
+    public init(transport: TransportKind, size: CGFloat) {
+        self.transport = transport
         self.size = size
     }
 
     public var body: some View {
-        if bluetooth {
+        switch transport {
+        case .bluetooth:
             BluetoothRune()
                 .stroke(style: StrokeStyle(lineWidth: size * 0.1, lineCap: .round, lineJoin: .round))
                 .frame(width: size, height: size)
                 .accessibilityLabel("Bluetooth")
-        } else {
+        case .wifi:
             Image(systemName: "wifi")
                 .font(.system(size: size * 0.8, weight: .semibold))
                 .frame(width: size, height: size)
                 .accessibilityLabel("Wi-Fi")
+        case .usb:
+            Image(systemName: "cable.connector")
+                .font(.system(size: size * 0.75, weight: .semibold))
+                .frame(width: size, height: size)
+                .accessibilityLabel("USB")
         }
     }
 }

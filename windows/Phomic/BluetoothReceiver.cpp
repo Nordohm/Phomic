@@ -212,8 +212,8 @@ namespace phomic
             const uint64_t generation = m_generation.load();
             if (!m_arbiter.Owns(Source::Bluetooth))
             {
-                // Newest connection wins: Wi-Fi took over.
-                Drop(generation, L"Switched to Wi-Fi.", true);
+                // Newest connection wins: Wi-Fi or USB took over.
+                Drop(generation, SwitchedToText(m_arbiter.Owner()), true);
                 return;
             }
             const uint64_t lastAudio = m_lastAudioTick.load();
@@ -229,7 +229,7 @@ namespace phomic
         Drop(m_generation.load(), L"Disconnected from this PC.", true);
     }
 
-    void BluetoothReceiver::RequestSwitchToWiFi()
+    void BluetoothReceiver::RequestSwitch(Source to)
     {
         std::wstring clientId;
         {
@@ -240,7 +240,7 @@ namespace phomic
             }
             clientId = m_client->id;
         }
-        Notify(clientId, R"({"type":"switch","transport":"wifi"})");
+        Notify(clientId, std::format(R"({{"type":"switch","transport":"{}"}})", TransportName(to)));
     }
 
     void BluetoothReceiver::Shutdown()
@@ -636,7 +636,7 @@ namespace phomic
             Notify(previous->id, R"({"type":"bye","reason":"Another iPhone connected to this PC."})");
         }
 
-        // Newest connection wins: a Wi-Fi session (if any) hangs up when it sees this.
+        // Newest connection wins: a Wi-Fi or USB session (if any) hangs up when it sees this.
         m_arbiter.Force(Source::Bluetooth);
         {
             std::lock_guard decodeGuard(m_decodeLock);

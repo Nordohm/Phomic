@@ -31,6 +31,15 @@
     <ClCompile Include="BluetoothReceiver.cpp">
       <Filter>Engine</Filter>
     </ClCompile>
+    <ClCompile Include="UsbReceiver.cpp">
+      <Filter>Engine</Filter>
+    </ClCompile>
+    <ClCompile Include="AppleUsb.cpp">
+      <Filter>Engine</Filter>
+    </ClCompile>
+    <ClCompile Include="PhoneProtocol.cpp">
+      <Filter>Engine</Filter>
+    </ClCompile>
     <ClCompile Include="CableOutput.cpp">
       <Filter>Engine</Filter>
     </ClCompile>
@@ -73,6 +82,18 @@
       <Filter>Engine</Filter>
     </ClInclude>
     <ClInclude Include="BluetoothReceiver.h">
+      <Filter>Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="UsbReceiver.h">
+      <Filter>Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="AppleUsb.h">
+      <Filter>Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="Net.h">
+      <Filter>Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="PhoneProtocol.h">
       <Filter>Engine</Filter>
     </ClInclude>
     <ClInclude Include="Pairing.h">

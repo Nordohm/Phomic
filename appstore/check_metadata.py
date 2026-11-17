@@ -7,7 +7,7 @@ import re
 
 LIMITS = {
     "Name": 30, "Subtitle": 30, "Promotional Text": 170, "Description": 4000,
-    "Keywords": 100, "Copyright": 200, "Notes": 4000,
+    "Keywords": 100, "Copyright": 200, "Notes": 4000, "What's New in This Version": 4000,
 }
 
 text = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "metadata.md"), encoding="utf-8").read()

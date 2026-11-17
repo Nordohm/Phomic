@@ -34,3 +34,6 @@ windows/packages/
 
 # Personal development container (not published)
 /ios/.devcontainer/
+
+# Python
+__pycache__/

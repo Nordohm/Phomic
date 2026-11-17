@@ -13,12 +13,14 @@ public struct MicActivityAttributes: ActivityAttributes {
 
         public var status: Status
         public var pcName: String
-        public var bluetooth: Bool
+        public var transport: TransportKind
+        /// Set by the widget only, for an activity gone stale (Phomic stopped without ending it).
+        public var stopped = false
 
-        public init(status: Status, pcName: String, bluetooth: Bool) {
+        public init(status: Status, pcName: String, transport: TransportKind) {
             self.status = status
             self.pcName = pcName
-            self.bluetooth = bluetooth
+            self.transport = transport
         }
     }
 

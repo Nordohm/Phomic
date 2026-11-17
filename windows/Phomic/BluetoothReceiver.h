@@ -58,8 +58,8 @@ namespace phomic
         // Keeps the service published and watches the connection. UI thread, every ~50 ms.
         void Tick();
         void Disconnect();
-        // Ask the connected phone to move the session to Wi-Fi.
-        void RequestSwitchToWiFi();
+        // Ask the connected phone to move the session to another transport.
+        void RequestSwitch(Source to);
         // The pairing setting changed: advertise it (once no iPhone is connected). UI thread.
         void RefreshAdvertisement();
         void Shutdown();

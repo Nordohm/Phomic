@@ -14,6 +14,8 @@ enum WireProtocol {
     static let frameSamples = 480
     static let serviceType = "_phomic._tcp"
     static let defaultPort: UInt16 = 50505
+    /// Where the iPhone waits for the PC over USB (loopback only, see UsbListener).
+    static let usbPort: UInt16 = 50505
     static let magic: [UInt8] = Array("PHMC".utf8)
 }
 
@@ -31,9 +33,9 @@ struct ControlMessage: Codable, Sendable {
     var rtt: Double?
     var muted: Bool?
     var message: String?
-    /// "switch" requests: "wifi" or "bluetooth".
+    /// "switch" requests: "wifi", "bluetooth" or "usb". In "welcome": "usb" over USB.
     var transport: String?
-    /// The PC's id (8 hex digits), the same over Wi-Fi and Bluetooth.
+    /// The PC's id (8 hex digits), the same over Wi-Fi, Bluetooth and USB.
     var pcId: String?
     /// Pairing code, when the PC requires one.
     var code: String?

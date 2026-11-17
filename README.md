@@ -1,6 +1,6 @@
 # Phomic
 
-Use an iPhone as a microphone for a Windows PC, over Wi-Fi or Bluetooth.
+Use an iPhone as a microphone for a Windows PC, over Wi-Fi, Bluetooth or a USB cable.
 
 <a href="https://apps.apple.com/app/phomic/id6835323092"><picture>
   <source media="(prefers-color-scheme: dark)" srcset="appstore/badges/download-on-the-app-store-white.svg">
@@ -16,35 +16,38 @@ Use an iPhone as a microphone for a Windows PC, over Wi-Fi or Bluetooth.
 
 | Part | Tech | Location |
 |---|---|---|
-| Windows app (receiver) | WinUI 3, C++/WinRT, WASAPI, Winsock, DNS-SD, Bluetooth LE (GATT server) | [`windows/`](windows/) |
+| Windows app (receiver) | WinUI 3, C++/WinRT, WASAPI, Winsock, DNS-SD, Bluetooth LE (GATT server), usbmux | [`windows/`](windows/) |
 | iOS app (sender) | SwiftUI, Core Audio I/O units, Network.framework, CoreBluetooth, built with [xtool](https://github.com/xtool-org/xtool) | [`ios/`](ios/) |
 
 ```
                        ┌─ Wi-Fi: 48 kHz PCM, 10 ms UDP packets (+ TCP control) ─┐
-iPhone mic ─► RemoteIO                                                           ├─► jitter buffer ─► VB-CABLE ─► "Phomic" mic
-  (Mic Mode)  ─────────── Bluetooth LE: 48 kHz Opus, iPhone → PC GATT writes ───┘     (48 kHz)
+iPhone mic ─► RemoteIO ├─ USB cable: the same packets and control, one TCP stream ┤─► jitter buffer ─► VB-CABLE ─► "Phomic" mic
+  (Mic Mode)           └─ Bluetooth LE: 48 kHz Opus, iPhone → PC GATT writes ─────┘     (48 kHz)
 ```
 
-| | Wi-Fi | Bluetooth LE |
-|---|---|---|
-| Audio | 48 kHz, 16-bit PCM (~0.8 Mbit/s) | 48 kHz Opus, 64 kbit/s (less on small links) |
-| Latency | buffer + ~10 ms | buffer + ~20 ms |
-| Needs | same network, firewall allowed | Bluetooth on both, within ~10 m |
+| | Wi-Fi | Bluetooth LE | USB |
+|---|---|---|---|
+| Audio | 48 kHz, 16-bit PCM (~0.8 Mbit/s) | 48 kHz Opus, 64 kbit/s (less on small links) | 48 kHz, 16-bit PCM |
+| Latency | buffer + ~10 ms | buffer + ~20 ms | buffer + ~1 ms |
+| Needs | same network, firewall allowed | Bluetooth on both, within ~10 m | a cable, and Apple's free [Apple Devices](https://apps.microsoft.com/detail/9NP83LWLPZ9K) app on the PC |
 
-Wi-Fi and Bluetooth are equals, and only one is used at a time:
+Wi-Fi, Bluetooth and USB are equals, and only one is used at a time:
 
-- **On the iPhone:** a **Wi-Fi | Bluetooth** switch sits at the top. Changing it while live moves the session to
-  the other transport, and the microphone stays on.
-- **On the PC:** the *Connection* card lists both, each with its status and an on/off switch. While one is in
-  use, the other shows **Switch here**, which asks the iPhone to move over.
-- **Newest wins:** if a new connection arrives on either transport, it takes over, and the old one hangs up.
-- **You pick the PC on both transports:** the iPhone lists PCs under *Computers*, found with Bonjour on Wi-Fi
-  and by each PC's Bluetooth advertisement. Only the PC you pick connects.
+- **On the iPhone:** **Wi-Fi**, **Bluetooth** and **USB** are the tabs at the bottom (Liquid Glass on iOS 26).
+  Changing tab while live moves the session to the other transport, and the microphone stays on. Picking USB ends the wireless session at once; with the
+  cable in, the PC reaches the iPhone through it a fraction of a second later and a new session starts.
+- **On the PC:** the *Connection* card lists all three, each with its status and an on/off switch. While one is in
+  use, the others show **Switch here**, which asks the iPhone to move over.
+- **Newest wins:** if a new connection arrives on any transport, it takes over, and the old one hangs up.
+- **You pick the PC:** over Wi-Fi and Bluetooth the iPhone lists PCs in that tab, found with Bonjour on Wi-Fi
+  and by each PC's Bluetooth advertisement, and only the PC you pick connects. Over USB it's the PC at the other
+  end of the cable.
 - **Optional pairing code:** *Require pairing code* on the PC applies to Wi-Fi and Bluetooth alike. The PC shows a
   4-digit code next to a refresh button (*New code*), and the iPhone asks for it once per PC and remembers it. A new
   code makes every iPhone ask again;
   *Settings* (gear icon) on the iPhone forgets saved codes. The code keeps strangers' phones out; it isn't
-  encryption.
+  encryption. USB doesn't ask for it: plugging the iPhone in, and its *Trust This Computer?* prompt, already show
+  whose iPhone it is.
 - **Buffering:** *Auto* (default) measures how unevenly packets arrive and keeps just enough buffer to cover
   99.5% of it plus 10 ms. It grows at once when the connection gets worse, or after a dropout, and shrinks one
   step at a time after 10 s of calm. It stays between 20 ms (30 ms on Bluetooth) and 200 ms. The fixed choices
@@ -61,6 +64,10 @@ Wi-Fi and Bluetooth are equals, and only one is used at a time:
 3. When Windows Firewall asks, allow Phomic on **private networks**.
 4. Install [Phomic from the App Store](https://apps.apple.com/app/phomic/id6835323092) on your iPhone (iOS 18 or
    later) and pick your PC. In Discord, Teams, OBS and so on, choose the microphone **Phomic**.
+5. For USB, also install [Apple Devices](https://apps.microsoft.com/detail/9NP83LWLPZ9K) from the Microsoft Store
+   (free, from Apple; the PC app's **Get Apple Devices** opens it). Windows needs it to talk to an iPhone over a
+   cable; Phomic uses its USB service, which starts when you sign in to Windows, so the Apple Devices window can stay
+   closed. Plug the iPhone in, tap *Trust* on it the first time, and pick **USB** in Phomic on the iPhone.
 
 Uninstalling (*Settings › Apps*) also gives the VB-CABLE devices their original names back and removes Phomic's
 settings. VB-CABLE itself stays installed; remove it with its own setup program if you don't need it.
@@ -128,12 +135,37 @@ need to create a project in Visual Studio; it's already in `windows/`.
 - **A release:** `powershell -ExecutionPolicy Bypass -File windows/build-release.ps1` builds Release and writes
   `windows/release/Phomic-Setup-<version>.exe` and `Phomic-<version>-portable.zip` (no debug symbols). It needs
   [Inno Setup 7](https://jrsoftware.org/isdl.php). The version lives in `windows/Phomic/Version.h` (exe version info,
-  *Show details* and the installer all take it from there). The installer script is `windows/installer/Phomic.iss`:
+  *Show details*, the line at the bottom of the window and the installer all take it from there). The installer
+  script is `windows/installer/Phomic.iss`:
   per-user install, Start-menu shortcut; its uninstaller takes `/KEEPSETTINGS=1` and `/KEEPMICROPHONE=1`.
 - On first launch, Windows Firewall asks whether Phomic may accept connections. Allow it on **private
   networks**. Phomic listens on **TCP and UDP port 50505**.
 - Bluetooth needs no pairing. With the **Bluetooth** switch on, the PC publishes Phomic's Bluetooth service and
   waits: the iPhone connects to it, the way a phone connects to headphones. The PC never scans or retries.
+- **USB** goes through Apple's USB service (*usbmux*, from the [Apple Devices](https://apps.microsoft.com/detail/9NP83LWLPZ9K)
+  app, or Apple Mobile Device Support from iTunes) on `127.0.0.1:27015`. With the **USB** switch on, the PC
+  watches for iPhones being plugged in and tries to connect to each one a few times a second until Phomic on it
+  answers, so picking USB on the iPhone takes effect at once.
+  When USB can't work, the row says why, with one button that fixes it where Phomic can (`AppleUsb.*` finds out,
+  without admin rights):
+
+  | The row says | Phomic checks | Button |
+  |---|---|---|
+  | Needs Apple Devices | Apple Devices isn't installed, nor Apple Mobile Device Support | **Get Apple Devices** (Microsoft Store) |
+  | Waiting for Apple's USB service… | Apple Devices is installed, but nothing answers on port 27015 yet. After 20 s Phomic starts the service itself, without a window | — |
+  | Apple's USB service didn't start | that didn't help either | **Open Apple Devices** (opening it starts the service) |
+  | … Apple Devices is off under *Startup* | its startup task is turned off, so Phomic doesn't start it uninvited | **Start it** (then **Open Apple Devices** if that didn't help) |
+  | A Windows port forward blocks Apple's USB service | a `netsh interface portproxy` rule listens on 27015 | **Copy command** (the `netsh … delete` to run as administrator) |
+  | *Program* uses port 27015 | another program listens there | — |
+  | Apple Mobile Device Service is stopped | only the older Apple Mobile Device Support is installed, and its service isn't running | **Get Apple Devices** |
+  | Apple's USB service has lost track of the iPhone | Windows' USB device list has more iPhones than Apple's service, for 6 s. It happens when the service restarts while an iPhone is plugged in, and only plugging it in again fixes it: Windows won't let a program reset a USB device without admin rights | — (unplug, wait, plug back in) |
+  | Apple's USB service can't reach the iPhone | Apple's service lists the iPhone but closes every connection to it without an answer, for 5 s (seen once, even for the iPhone's own system port) | — (plug in again; if that doesn't help, restart the iPhone) |
+
+  If Apple's service stops during a session (Apple Devices updating, say), the session ends with that reason and
+  Phomic connects again once the service is back. To start the service without a window, Phomic activates the
+  background agent in the Apple Devices package (`AMPDevicesAgent`, a COM server), which starts it the way the
+  Apple Devices window does. That's undocumented, hence the button as a fallback. A service started while an
+  iPhone was already plugged in sometimes misses it; then the row asks to plug it in again.
 - **Tray:** Phomic has a tray icon (click: open the window; right-click: *Open* / *Quit*; the tooltip shows
   the status). At the bottom of the window:
   - *Keep app running in tray when closing* makes the close button hide the window. *Quit* in the tray menu
@@ -150,14 +182,28 @@ need to create a project in Visual Studio; it's already in `windows/`.
   Windows it's the glyph alone (no tile). Source: `windows/Phomic/Assets/Phomic.svg`; `Phomic.ico` is rendered from it.
   The iOS app uses `Resources/AppIcon.png` (from `AppIcon.svg`, white on blue, via `iconPath` in `xtool.yml`).
 
+- **Tests** (`windows/tests/`, Python 3, nothing to install) play the iPhone against the running PC app on the
+  same computer, and read its window through UI Automation:
+  - `python -I windows/tests/fake_iphone_wifi.py` runs the Wi-Fi protocol: refusals (version, audio format,
+    pairing code), the hello timeout, ping, audio and mute, bye, lost contact, newest wins, *Disconnect* and
+    *Switch here*.
+  - `python -I windows/tests/fake_usbmux.py` stands in for Apple's USB service with fake iPhones: start Phomic with
+    the environment variable `PHOMIC_USBMUX_PORT=27115` (and USB on) and it talks to the fake instead. It covers
+    retries and how fast a listening iPhone is picked up, bad data, unplugging, Wi-Fi and USB taking over from each
+    other, and Apple's service going away and coming back.
+
+  Both take test names to run only some. They take over the PC app's connection while they run.
+
 Code map:
 
 | File | What it does |
 |---|---|
 | `StreamServer.*` | Wi-Fi: TCP control + UDP audio on one background thread (`WSAPoll`), Bonjour registration via `DnsServiceRegister` |
 | `BluetoothReceiver.*` | Bluetooth LE: GATT server and its advertisement (iPhones connect to it), Opus decode and loss concealment |
+| `UsbReceiver.*` | USB: watches Apple's usbmux service for plugged-in iPhones and connects to Phomic on them through the cable |
+| `AppleUsb.*` | Finds out why USB can't work: Apple Devices installed and on at startup, who holds port 27015, iPhones Windows sees |
 | `Adpcm.h`, `Resampler.*` | Fallback IMA-ADPCM decoder; polyphase windowed-sinc upsampler (24/16 kHz → 48 kHz) |
-| `SourceArbiter.h` | Decides whether Wi-Fi or Bluetooth feeds the audio pipeline |
+| `SourceArbiter.h` | Decides whether Wi-Fi, Bluetooth or USB feeds the audio pipeline |
 | `JitterBuffer.*` | Reorders packets, hides loss, absorbs jitter (fixed or Auto), and corrects phone/PC clock drift by resampling ±0.5% |
 | `CableOutput.*` | Direct kernel-streaming (WaveRT) output into VB-CABLE's driver pin, so its playback endpoints can stay disabled |
 | `VirtualMic.*` | Finds VB-CABLE's endpoints (grouped per cable device), renames/disables them, launches VB-CABLE's installer |
@@ -183,29 +229,37 @@ xtool dev build      # just compile (unsigned)
   (`xtool dev generate-xcode-project`) if you'd rather work in Xcode. xtool runs on Linux and Windows too, but
   there it needs the iOS SDK extracted from Xcode, and Apple's Xcode license only allows that SDK on Apple
   computers.
+- **SDK version:** xtool's linker records the deployment target (18.0) as the SDK version, and iOS then shows the
+  app as if it were built for iOS 18 (no Liquid Glass). `Package.swift` passes the linker SDK 26.0 instead.
 - **App ID:** `io.github.nordohm.Phomic` (`xtool.yml`). An App ID belongs to one developer team, so change it to
   your own before you build. With a free Apple account, xtool's signature lasts 7 days, so run `xtool dev` again
   after that; a paid developer account makes it last a year.
 
 iOS asks for **Microphone**, **Local Network** (Wi-Fi) and **Bluetooth** (only when you use it) access.
 
-- **Wi-Fi:** tap the PC under *Computers*, or use *Connect by Address* with an address from *Show details*
+- **Wi-Fi:** tap your PC in the *Wi-Fi* tab, or use *Connect by Address* with an address from *Show details*
   under *Connection* in the PC app.
-- **Bluetooth:** set the switch at the top to *Bluetooth* and tap your PC under *Computers*. The iPhone connects
+- **Bluetooth:** pick the *Bluetooth* tab and tap your PC. The iPhone connects
   to that PC only. If the link drops, iOS keeps a pending connection and reconnects as soon as the PC is back in
   range, also with Phomic in the background.
+- **USB:** pick the *USB* tab and plug the iPhone into the PC. While Phomic is on screen the iPhone waits, and the
+  PC connects to it through the cable; once connected it carries on with the screen locked. Unplugging pauses the session
+  and plugging back in resumes it.
 - **Pairing code:** a lock icon marks PCs that require one. Phomic asks for it the first time, or again after a *New code*.
-  *Settings* (gear icon) lists the PCs whose code is saved: swipe one to forget it, or *Forget All Codes*.
-- **Mute:** the big button is green when live and red when muted. Muting fully releases the microphone (the
+  *Settings* (gear icon) lists them under *Paired PCs*: swipe one to forget it, or *Forget All PCs*.
+- **Version:** at the bottom of *Settings*, read from the app's Info.plist, so it's always the installed one
+  (`MARKETING_VERSION` on App Store builds).
+- **Mute:** the big button is green when live and red when muted; while live, the screen glows green from the button outwards with your voice. Muting fully releases the microphone (the
   orange dot disappears). Phomic keeps silent, mixable playback
   running so iOS doesn't suspend it, and your music isn't interrupted.
 - **Processing:** Phomic records the microphone raw (RemoteIO, measurement mode, no automatic gain) and adds no
   processing of its own. The iPhone's **Mic Mode** decides: *Standard*, *Voice Isolation* (removes background
-  noise) or *Wide Spectrum* (keeps everything). Change it in Control Center, or with the *Processing* row under the
+  noise) or *Wide Spectrum* (keeps everything). Change it in Control Center, or with the *Mic Mode* button under the
   mute button while live, which opens the system picker. Apps can only read the setting, not change it. For a gate, compressor or noise
   suppression beyond that, use what Discord, Teams or OBS already have on the PC.
 - **Live Activity:** while connected, the lock screen and Dynamic Island show *Live* (green), *Muted* (red) or
-  *Reconnecting…*, with the PC's name and Wi-Fi or Bluetooth. Tap the microphone to mute or unmute without
+  *Reconnecting…*, with the PC's name and Wi-Fi, Bluetooth or USB. Swiping Phomic away in the app switcher ends it;
+  if Phomic stops without a chance to, it shows *Phomic stopped* after 3 minutes. Tap the microphone to mute or unmute without
   opening Phomic; tap elsewhere to open it. It's a widget extension (`Sources/PhomicWidget`, `PhomicWidget-Info.plist`);
   `Sources/PhomicActivity` holds what it shows and `ToggleMuteIntent`, the button's App Intent (also in Shortcuts as
   *Toggle Mute*). It's both a `LiveActivityIntent` (runs in the app) and an `AudioRecordingIntent` (may turn the
@@ -218,7 +272,7 @@ iOS asks for **Microphone**, **Local Network** (Wi-Fi) and **Bluetooth** (only w
   xtool's Darwin SDK and the tool; see the top of the script). Xcode builds (below) generate their own; there,
   `PhomicActivityIntents` (an `AppIntentsPackage`) is how the app and the widget include the intent.
 - **Background:** streaming continues with the screen locked. After a Wi-Fi drop it retries every 2 s; after a
-  Bluetooth drop iOS reconnects by itself (background mode `bluetooth-central`).
+  Bluetooth drop iOS reconnects by itself (background mode `bluetooth-central`); over USB the PC reconnects.
 
 ### App Store builds (no Mac needed)
 
@@ -249,7 +303,8 @@ The workflow keeps the certificate's name, the team ID and the key IDs out of it
 [`appstore/`](appstore/metadata.md).
 
 Code map: `MicController.swift` (state, lifecycle, pairing codes), `AudioCapture.swift` (Core Audio I/O,
-real-time ring buffer, framing), `StreamClient.swift` (Wi-Fi), `BluetoothLink.swift` (connects to the PC over Bluetooth),
+real-time ring buffer, framing), `StreamClient.swift` (Wi-Fi, and USB once connected), `UsbListener.swift` (waits for
+the PC over USB), `BluetoothLink.swift` (connects to the PC over Bluetooth),
 `BluetoothScanner.swift` (finds PCs over Bluetooth), `BluetoothAudio.swift` (Opus encoder; ADPCM fallback),
 `ServerBrowser.swift` (Bonjour), `WireProtocol.swift`, `ContentView.swift` (all screens, including Settings),
 `Acknowledgements.swift` (the Opus license notice). `Sources/COpus` builds libopus.
@@ -270,7 +325,7 @@ real-time ring buffer, framing), `StreamClient.swift` (Wi-Fi), `BluetoothLink.sw
 | phone → PC | `{"type":"ping","id":7,"rtt":9.8}` | every second; `rtt` is the last measured round trip in ms |
 | PC → phone | `{"type":"pong","id":7}` | |
 | phone → PC | `{"type":"mute","muted":true}` | the phone stops sending audio while muted |
-| PC → phone | `{"type":"switch","transport":"bluetooth"}` | the PC's *Switch here*: the phone hangs up Wi-Fi and starts Bluetooth |
+| PC → phone | `{"type":"switch","transport":"bluetooth"}` | the PC's *Switch here*: the phone hangs up and moves to that transport (`wifi`, `bluetooth` or `usb`) |
 | either | `{"type":"bye"}` | clean hang-up |
 
 The PC drops a phone it hasn't heard from in 6 s, and the phone gives up after 5 s without a reply.
@@ -278,6 +333,29 @@ The PC drops a phone it hasn't heard from in 6 s, and the phone gives up after 5
 **Audio:** UDP from the phone to `udpPort` on the address the TCP connection resolved to. Each datagram
 is 972 bytes, little-endian: `"PHMC"` magic (4) · `session` (4) · sequence number (4, wraps) · 480 × int16 PCM
 (mono, 48 kHz, 10 ms).
+
+## USB protocol
+
+Windows can't reach an iPhone over USB by itself. Apple's USB service can: *usbmux*, part of the Apple Devices app
+(or Apple Mobile Device Support), listening on `127.0.0.1:27015`. It reports iPhones as they're plugged in, and
+opens TCP connections to ports on them through the cable. Messages to it are XML plists, each after a 16-byte
+little-endian header (length, version 1, type 8, tag).
+
+1. The PC sends `Listen` and gets `Attached` (with a `DeviceID`) for every Apple device plugged in, and `Detached`
+   when one goes. Devices that usbmux reaches over the network instead are ignored.
+2. For each one, the PC sends `Connect` with `DeviceID` and `PortNumber` 50505 (in network byte order) on a new
+   connection to usbmux, every 300 ms (a refused try is closed without `TIME_WAIT`). `Number` 0 in the reply
+   means the connection is open; 3 means nothing listens there, because Phomic on that iPhone isn't on USB right
+   now.
+3. Phomic on the iPhone listens on port 50505 of its **loopback** interface while USB is picked, so only usbmux on
+   the iPhone itself can reach it, and Local Network permission isn't involved.
+4. From then on the connection carries the [Wi-Fi protocol](#wi-fi-protocol-version-1), with two changes: `welcome`
+   has `"transport":"usb"` and no `udpPort`, and the audio packets (the same 972 bytes as a UDP datagram) travel on
+   this connection, between the control lines. A packet starts with `PHMC` and a line with `{`. There's no pairing
+   code.
+
+If the cable comes out, both ends notice at once. The iPhone keeps listening, and the PC connects again when the
+iPhone is plugged back in. After a `bye` from either side the iPhone stops listening.
 
 ## Bluetooth LE protocol (version 2)
 
@@ -348,4 +426,11 @@ nibble first. The iPhone sends them only if it can't create an Opus encoder.
   *Show details* shows the connection interval once connected.
 - **Crackles or dropouts.** Leave *Buffering* on *Auto*, or pick *Stable (120 ms)*. *Show details* under
   *Connection* shows packet loss, the current buffer and rebuffer counts.
+- **USB doesn't work.** The *USB* row in the PC app says what's wrong and offers the fix (see
+  [Windows app](#windows-app)). Apple's USB service normally starts when you sign in to Windows; if it doesn't,
+  check that *Apple Devices* is on under *Settings › Apps › Startup*.
+- **USB: the iPhone is plugged in but nothing connects.** Pick *USB* in Phomic on the iPhone and tap *Connect with a
+  Cable*. Unlock the iPhone and tap *Trust* if it asks. If Windows doesn't see the iPhone at all (*Show details* says
+  how many iPhones Windows and Apple's service each see), try another cable: some only charge. If Windows sees it
+  but Apple's service doesn't, unplug it and plug it back in.
 - **Too quiet in Raw mode.** Raise *Gain* in the PC app.

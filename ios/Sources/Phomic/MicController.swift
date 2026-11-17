@@ -5,8 +5,9 @@ import UIKit
 import PhomicActivity
 
 /// App state: finding PCs (Bonjour over Wi-Fi, announcements over Bluetooth), the
-/// connection lifecycle on either transport (with automatic reconnect and live
-/// hand-over between them), pairing codes, and the microphone.
+/// connection lifecycle on each transport (Wi-Fi, Bluetooth, or a USB cable, where the PC
+/// connects to the iPhone), with automatic reconnect and live hand-over between them,
+/// pairing codes, and the microphone.
 ///
 /// While a session is active the app always runs *some* audio I/O, which is what lets
 /// iOS keep it alive in the background (UIBackgroundModes: audio): the microphone when
@@ -17,12 +18,21 @@ final class MicController {
     enum Transport: String, CaseIterable, Identifiable {
         case wifi
         case bluetooth
+        case usb
 
         var id: String { rawValue }
         var title: String {
             switch self {
             case .wifi: "Wi-Fi"
             case .bluetooth: "Bluetooth"
+            case .usb: "USB"
+            }
+        }
+        var kind: TransportKind {
+            switch self {
+            case .wifi: .wifi
+            case .bluetooth: .bluetooth
+            case .usb: .usb
             }
         }
     }
@@ -59,9 +69,16 @@ final class MicController {
         didSet {
             if (oldValue == .idle) != (phase == .idle) {
                 updateScanning()
+                updateUsbStandby()
             }
             refreshLiveActivity()
         }
+    }
+    /// USB: the iPhone stopped waiting for the PC (another connection took over, the PC refused,
+    /// no microphone access, or listening failed) until it's asked to, or the cable is plugged
+    /// in again. Otherwise the PC, which keeps trying, would run into the same thing over and over.
+    private(set) var usbPaused = false {
+        didSet { updateUsbStandby() }
     }
     private(set) var transport: Transport?
     private(set) var servers: [DiscoveredServer] = []
@@ -83,22 +100,33 @@ final class MicController {
             guard isMuted != oldValue else { return }
             client.setMuted(isMuted)
             bluetooth.setMuted(isMuted)
-            if isActive {
-                applyAudioState()
-            }
+            usbClient.setMuted(isMuted)
             refreshLiveActivity()
+            if isActive {
+                // Starting or stopping the microphone blocks this thread for a moment: let the
+                // button show the change first, then switch the audio.
+                Task { @MainActor [weak self] in
+                    try? await Task.sleep(for: .milliseconds(20))
+                    guard let self, self.isActive else { return }
+                    self.applyAudioState()
+                }
+            }
         }
     }
 
-    /// Wi-Fi or Bluetooth, chosen with the switch at the top. Changing it while live
+    /// Wi-Fi, Bluetooth or USB, chosen with the switch at the top. Changing it while live
     /// hands the session over to the other transport (the microphone keeps running).
     var preferredTransport: Transport {
         didSet {
             UserDefaults.standard.set(preferredTransport.rawValue, forKey: Keys.transport)
+            if preferredTransport == .usb, oldValue != .usb {
+                usbPaused = false // picking USB is asking to connect
+            }
             if isActive, transport != preferredTransport {
                 switchTransport(to: preferredTransport)
             }
             updateScanning()
+            updateUsbStandby()
         }
     }
 
@@ -126,6 +154,9 @@ final class MicController {
 
     private let client: StreamClient
     private let bluetooth: BluetoothLink
+    /// The same protocol as Wi-Fi, on the connection the PC opens through the cable.
+    private let usbClient: StreamClient
+    private let usbListener = UsbListener()
     private let capture = AudioCapture()
     private let browser = ServerBrowser()
     private let scanner = BluetoothScanner()
@@ -136,6 +167,12 @@ final class MicController {
     @ObservationIgnored private var currentPC: (id: String?, name: String)?
     @ObservationIgnored private var retryTask: Task<Void, Never>?
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
+    /// Whether the app is on screen: the iPhone waits for the PC over USB only then, unless a
+    /// session keeps it running.
+    @ObservationIgnored private var appActive = UIApplication.shared.applicationState != .background
+    @ObservationIgnored private var batteryState = UIDevice.BatteryState.unknown
+    /// Set while a switch the PC asked for is under way (see switchForPC).
+    @ObservationIgnored private var pcAskedToSwitch = false
     @ObservationIgnored private let liveActivity = LiveActivityController()
 
     private enum Keys {
@@ -156,6 +193,7 @@ final class MicController {
         let name = UIDevice.current.name
         client = StreamClient(deviceName: name)
         bluetooth = BluetoothLink(deviceName: name)
+        usbClient = StreamClient(deviceName: name)
 
         client.onEvent = { [weak self] event in
             DispatchQueue.main.async { [weak self] in
@@ -167,11 +205,23 @@ final class MicController {
                 MainActor.assumeIsolated { self?.handle(event) }
             }
         }
+        usbClient.onEvent = { [weak self] event in
+            DispatchQueue.main.async { [weak self] in
+                MainActor.assumeIsolated { self?.handleUsb(event) }
+            }
+        }
+        usbListener.onEvent = { [weak self] event in
+            DispatchQueue.main.async { [weak self] in
+                MainActor.assumeIsolated { self?.handle(event) }
+            }
+        }
         let client = self.client
         let bluetooth = self.bluetooth
+        let usbClient = self.usbClient
         capture.onFrame = { frame in
             client.send(frame: frame)
             bluetooth.send(frame: frame)
+            usbClient.send(frame: frame)
         }
         capture.onLevel = { [weak self] peak in
             DispatchQueue.main.async { [weak self] in
@@ -206,8 +256,10 @@ final class MicController {
             self.isMuted.toggle()
         }
         observeAudioSession()
+        observeCable()
         browser.start()
         updateScanning()
+        updateUsbStandby()
     }
 
     // MARK: - User actions
@@ -240,6 +292,12 @@ final class MicController {
         beginBluetooth(pc)
     }
 
+    /// USB after another connection took over: wait for the PC again (it connects by itself).
+    func connectOverUsb() {
+        lastError = nil
+        usbPaused = false
+    }
+
     func submitPairingCode(_ code: String) {
         guard let prompt = pairingPrompt else { return }
         pairingPrompt = nil
@@ -258,6 +316,7 @@ final class MicController {
         pairingPrompt = nil
     }
 
+    /// Not offered over USB: there, unplugging the cable is how a session ends.
     func disconnect() {
         stopAll()
     }
@@ -298,6 +357,80 @@ final class MicController {
             bluetooth.start(target: pc.id, name: pc.name, hint: pc.peripheralID,
                             code: storedCode(pcId: pc.id, name: pc.name))
         }
+    }
+
+    /// A PC reached this iPhone through the cable while it was waiting (USB picked, app open):
+    /// start the session on that connection.
+    private func beginUsb(with connection: NWConnection) {
+        retryTask?.cancel()
+        lastError = nil
+        transport = .usb
+        target = nil
+        currentPC = nil // whichever PC the cable goes to; it says who it is in "welcome"
+        phase = .connecting("your PC")
+        Task {
+            guard await prepareAudio(for: .usb) else {
+                // No microphone: stop waiting, or the PC would connect again and again.
+                usbPaused = true
+                connection.cancel()
+                return
+            }
+            usbClient.setMuted(isMuted)
+            usbClient.adopt(connection)
+        }
+    }
+
+    /// Ends a USB session that isn't streaming by then (no PC at the end of the cable), so it
+    /// doesn't sit on "connecting" with the microphone on. Back on the USB tab, the iPhone
+    /// waits for the cable again while Phomic is on screen.
+    private func stopUsbUnlessStreaming(after delay: Duration) {
+        retryTask?.cancel()
+        retryTask = Task { [weak self] in
+            try? await Task.sleep(for: delay)
+            guard !Task.isCancelled, let self, self.transport == .usb, !self.isStreaming else { return }
+            self.stopAll()
+        }
+    }
+
+    /// While idle with USB picked and the app on screen, wait for the PC: it connects by itself
+    /// as soon as the cable is in. (During a session the listener belongs to the session.)
+    private func updateUsbStandby() {
+        guard phase == .idle else { return }
+        if preferredTransport == .usb && !usbPaused && appActive {
+            usbListener.start()
+        } else {
+            usbListener.stop()
+        }
+    }
+
+    /// Plugging the cable in (the iPhone starts charging) after a Disconnect means: connect again.
+    private func observeCable() {
+        let device = UIDevice.current
+        device.isBatteryMonitoringEnabled = true
+        batteryState = device.batteryState
+        let center = NotificationCenter.default
+        observers.append(center.addObserver(forName: UIDevice.batteryStateDidChangeNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                let state = UIDevice.current.batteryState
+                if self.batteryState == .unplugged, state == .charging || state == .full {
+                    self.usbPaused = false
+                }
+                self.batteryState = state
+            }
+        })
+        observers.append(center.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.appActive = false
+                self?.updateUsbStandby()
+            }
+        })
+        observers.append(center.addObserver(forName: UIApplication.willEnterForegroundNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.appActive = true
+                self?.updateUsbStandby()
+            }
+        })
     }
 
     /// Asks for microphone access and starts the right audio I/O. False if it failed or
@@ -355,10 +488,7 @@ final class MicController {
         case .roundTrip(let milliseconds):
             roundTripMs = milliseconds
         case .switchRequested(let requested):
-            // The PC's "Switch here" button.
-            if let next = Transport(rawValue: requested) {
-                preferredTransport = next
-            }
+            switchForPC(to: requested)
         case let .pairingRequired(pcId, pcName, _):
             let attempted = target
             let id = pcId ?? currentPC?.id
@@ -370,6 +500,12 @@ final class MicController {
                 pairingPrompt = PairingPrompt(pcId: id, pcName: name, wrongCode: hadCode,
                                               retry: .wifi(endpoint: attempted.endpoint, name: attempted.name, pcId: id))
             }
+        case .takenOver:
+            stopAll()
+            lastError = "Another connection took over on the PC."
+        case .refused(let reason):
+            stopAll()
+            lastError = reason
         case .disconnected(let reason, let canRetry):
             roundTripMs = nil
             if let target, canRetry, reason != nil {
@@ -390,9 +526,7 @@ final class MicController {
         case .connecting:
             if !isStreaming { phase = .connecting(currentPC?.name ?? "your PC") }
         case .switchRequested(let requested):
-            if let next = Transport(rawValue: requested) {
-                preferredTransport = next
-            }
+            switchForPC(to: requested)
         case let .connected(pcName, sampleRate):
             currentPC = (currentPC?.id, pcName)
             phase = .streaming(pcName)
@@ -418,9 +552,78 @@ final class MicController {
         }
     }
 
+    private func handleUsb(_ event: StreamClient.Event) {
+        guard transport == .usb else { return }
+        switch event {
+        case .connecting:
+            break
+        case let .connected(serverName, pcId):
+            retryTask?.cancel()
+            phase = .streaming(serverName)
+            lastError = nil
+            currentPC = (pcId ?? currentPC?.id, serverName)
+        case .roundTrip(let milliseconds):
+            roundTripMs = milliseconds
+        case .switchRequested(let requested):
+            switchForPC(to: requested)
+        case .pairingRequired:
+            // The PC never asks for a code over USB.
+            stopAll()
+            lastError = "The PC asked for a pairing code over USB. Update Phomic on the PC."
+        case .refused(let reason):
+            // The PC would only refuse again: stop waiting until asked.
+            usbPaused = true
+            stopAll()
+            lastError = reason
+        case .takenOver:
+            // Don't let the PC straight back in: it would push the other connection out.
+            usbPaused = true
+            stopAll()
+            lastError = "Another connection took over on the PC."
+        case let .disconnected(reason, canRetry):
+            roundTripMs = nil
+            if canRetry {
+                // Unplugged (that's how a USB session ends), or the PC went away. Wait a little
+                // in case it was a wobbly cable or the PC app restarting, then stop.
+                phase = .reconnecting(currentPC?.name ?? "your PC")
+                stopUsbUnlessStreaming(after: .seconds(10))
+            } else if reason != nil {
+                stopAll()
+                lastError = reason
+            }
+        }
+    }
+
+    private func handle(_ event: UsbListener.Event) {
+        switch event {
+        case .connection(let connection):
+            if transport == .usb {
+                usbClient.setMuted(isMuted)
+                usbClient.adopt(connection)
+            } else if phase == .idle, preferredTransport == .usb, !usbPaused {
+                beginUsb(with: connection)
+            } else {
+                connection.cancel()
+            }
+        case .failed(let message):
+            guard transport == .usb || phase == .idle else { return }
+            usbPaused = true // shows Connect, which tries again, instead of a spinner for nothing
+            stopAll()
+            lastError = message
+        }
+    }
+
     private var isStreaming: Bool {
         if case .streaming = phase { return true }
         return false
+    }
+
+    /// The PC's "Switch here": move the session to `transport` ("wifi", "bluetooth", "usb").
+    private func switchForPC(to transport: String) {
+        guard let next = Transport(rawValue: transport) else { return }
+        pcAskedToSwitch = true
+        preferredTransport = next
+        pcAskedToSwitch = false
     }
 
     /// Hands a live session over to the other transport without stopping the microphone.
@@ -429,7 +632,29 @@ final class MicController {
         lastError = nil
         roundTripMs = nil
         bluetoothSampleRate = nil
+        if next != .usb {
+            usbListener.stop()
+            usbClient.disconnect() // says "bye"; with the listener gone the PC doesn't come back
+        }
         switch next {
+        case .usb:
+            client.disconnect()
+            bluetooth.stop()
+            target = nil
+            guard pcAskedToSwitch else {
+                // Picked here: go straight to the USB tab. If the cable is in, the PC reaches
+                // the iPhone through it within a fraction of a second and a new session starts.
+                stopAll()
+                return
+            }
+            // The PC's "Switch here" (it only offers USB with the iPhone plugged in): hand the
+            // session over with the microphone on, since Phomic may be in the background, where
+            // the USB tab can't wait for the PC.
+            transport = .usb
+            phase = .connecting(currentPC?.name ?? "your PC")
+            usbClient.setMuted(isMuted)
+            usbListener.start()
+            stopUsbUnlessStreaming(after: .seconds(5))
         case .bluetooth:
             guard let pc = currentPC, let id = pc.id else {
                 stopAll()
@@ -494,8 +719,10 @@ final class MicController {
         retryTask = nil
         target = nil
         transport = nil
-        client.disconnect()  // both are no-ops when already idle
+        client.disconnect()  // all no-ops when already idle
         bluetooth.stop()
+        usbListener.stop()
+        usbClient.disconnect()
         capture.stop()
         phase = .idle
         level = 0
@@ -600,14 +827,14 @@ final class MicController {
             liveActivity.show(nil)
             return
         }
-        let bluetooth = transport == .bluetooth
+        let kind = (transport ?? preferredTransport).kind
         switch phase {
         case .idle:
             liveActivity.show(nil)
         case .connecting(let name), .reconnecting(let name):
-            liveActivity.show(.init(status: .reconnecting, pcName: name, bluetooth: bluetooth))
+            liveActivity.show(.init(status: .reconnecting, pcName: name, transport: kind))
         case .streaming(let name):
-            liveActivity.show(.init(status: isMuted ? .muted : .live, pcName: name, bluetooth: bluetooth))
+            liveActivity.show(.init(status: isMuted ? .muted : .live, pcName: name, transport: kind))
         }
     }
 
@@ -619,6 +846,13 @@ final class MicController {
         observers.append(center.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated {
                 self?.refreshLiveActivity()
+            }
+        })
+        // Swiped away in the app switcher (Phomic runs in the background during a session, so
+        // iOS says so first): take the Live Activity along.
+        observers.append(center.addObserver(forName: UIApplication.willTerminateNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.liveActivity.endBeforeExit()
             }
         })
         observers.append(center.addObserver(forName: AVAudioSession.interruptionNotification, object: nil, queue: .main) { [weak self] note in

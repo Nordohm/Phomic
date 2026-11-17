@@ -2,7 +2,9 @@
 #include "StreamServer.h"
 #include "JitterBuffer.h"
 #include "JsonUtil.h"
+#include "Net.h"
 #include "Pairing.h"
+#include "PhoneProtocol.h"
 
 using namespace winrt::Windows::Data::Json;
 
@@ -84,21 +86,9 @@ namespace phomic
             return INVALID_SOCKET;
         }
 
-        void SetNonBlocking(SOCKET s)
-        {
-            u_long on = 1;
-            ioctlsocket(s, FIONBIO, &on);
-        }
-
-        void CloseSocket(SOCKET& s)
-        {
-            if (s != INVALID_SOCKET)
-            {
-                shutdown(s, SD_BOTH);
-                closesocket(s);
-                s = INVALID_SOCKET;
-            }
-        }
+        using net::CloseSocket;
+        using net::SendLine;
+        using net::SetNonBlocking;
     }
 
     StreamServer::StreamServer(JitterBuffer& jitter, SourceArbiter& arbiter) : m_jitter(jitter), m_arbiter(arbiter)
@@ -263,14 +253,14 @@ namespace phomic
             {
                 DropActive(L"Disconnected from this PC.", true);
             }
-            if (m_switchToBluetooth.exchange(false) && m_active.socket != INVALID_SOCKET)
+            if (const int to = m_switchTo.exchange(0); to != 0 && m_active.socket != INVALID_SOCKET)
             {
-                SendLine(m_active.socket, R"({"type":"switch","transport":"bluetooth"})");
+                SendLine(m_active.socket, protocol::Switch(static_cast<Source>(to)));
             }
             if (m_active.socket != INVALID_SOCKET && m_session != 0 && !m_arbiter.Owns(Source::WiFi))
             {
-                // A Bluetooth connection took over.
-                DropActive(L"Switched to Bluetooth.", true);
+                // A Bluetooth or USB connection took over.
+                DropActive(SwitchedToText(m_arbiter.Owner()), true);
             }
         }
 
@@ -320,34 +310,14 @@ namespace phomic
                 }
                 return; // WSAEWOULDBLOCK or a real error
             }
-            if (n != static_cast<int>(kPacketBytes) || std::memcmp(buf, kPacketMagic, sizeof(kPacketMagic)) != 0)
+            protocol::Audio audio;
+            if (!protocol::ParseAudio(buf, static_cast<size_t>(n), audio) ||
+                m_active.socket == INVALID_SOCKET || audio.session != m_session || !m_arbiter.Owns(Source::WiFi))
             {
                 continue;
             }
-
-            uint32_t session = 0;
-            uint32_t seq = 0;
-            std::memcpy(&session, buf + 4, sizeof(session));
-            std::memcpy(&seq, buf + 8, sizeof(seq));
-            if (m_active.socket == INVALID_SOCKET || session != m_session || !m_arbiter.Owns(Source::WiFi))
-            {
-                continue;
-            }
-
-            int16_t samples[kFrameSamples];
-            std::memcpy(samples, buf + kPacketHeaderBytes, sizeof(samples));
-            int peak = 0;
-            for (int16_t sample : samples)
-            {
-                peak = std::max(peak, std::abs(static_cast<int>(sample)));
-            }
-            const float level = peak / 32768.f;
-            if (level > m_peak.load(std::memory_order_relaxed))
-            {
-                m_peak.store(level, std::memory_order_relaxed);
-            }
-
-            m_jitter.Push(seq, samples);
+            protocol::RaisePeak(m_peak, audio.peak);
+            m_jitter.Push(audio.sequence, audio.samples);
             m_lastAudioTick = Now();
             std::lock_guard guard(m_statusLock);
             ++m_status.packets;
@@ -440,74 +410,46 @@ namespace phomic
 
     bool StreamServer::HandleHello(std::string const& line)
     {
-        auto reject = [&](std::wstring_view why)
-        {
-            SendLine(m_pending.socket, std::format(R"({{"type":"error","message":"{}"}})", JsonEscape(std::wstring_view(why))));
-            ClosePending();
-            return false;
-        };
-
-        std::wstring name;
-        try
-        {
-            JsonObject msg{ nullptr };
-            if (!JsonObject::TryParse(winrt::to_hstring(line), msg) || msg.GetNamedString(L"type", L"") != L"hello")
-            {
-                ClosePending();
-                return false;
-            }
-            if (static_cast<int>(msg.GetNamedNumber(L"version", 0)) != kProtocolVersion)
-            {
-                return reject(L"The iPhone app and the PC app are different versions. Please update both.");
-            }
-            if (static_cast<uint32_t>(msg.GetNamedNumber(L"sampleRate", 0)) != kSampleRate ||
-                static_cast<int>(msg.GetNamedNumber(L"channels", 0)) != 1 ||
-                static_cast<uint32_t>(msg.GetNamedNumber(L"frameSamples", 0)) != kFrameSamples)
-            {
-                return reject(L"Unsupported audio format.");
-            }
-            name = msg.GetNamedString(L"name", L"iPhone");
-            const std::wstring code{ msg.GetNamedString(L"code", L"") };
-            if (!pairing::Accepts(code))
-            {
-                // The phone asks the user for the code shown in this window and tries again.
-                SendLine(m_pending.socket, std::format(
-                    R"({{"type":"error","reason":"pairing","pcId":"{}","name":"{}","message":"{}"}})",
-                    JsonEscape(std::wstring_view(pairing::PcId())), JsonEscape(std::wstring_view(m_computerName)),
-                    code.empty() ? "This PC needs a pairing code." : "Wrong pairing code."));
-                ClosePending();
-                std::lock_guard guard(m_statusLock);
-                m_status.lastDisconnect = std::format(L"{} was turned away: {}.", name.empty() ? L"An iPhone" : name,
-                    code.empty() ? L"no pairing code" : L"wrong pairing code");
-                return false;
-            }
-        }
-        catch (winrt::hresult_error const&)
+        const protocol::Hello hello = protocol::ParseHello(line);
+        if (!hello.valid)
         {
             ClosePending();
             return false;
         }
-        if (name.empty())
+        if (!hello.refusal.empty())
         {
-            name = L"iPhone";
+            SendLine(m_pending.socket, protocol::Error(hello.refusal));
+            ClosePending();
+            std::lock_guard guard(m_statusLock);
+            m_status.lastDisconnect = std::format(L"{} was turned away: {}", hello.name, hello.refusal);
+            return false;
         }
+        if (!pairing::Accepts(hello.code))
+        {
+            // The phone asks the user for the code shown in this window and tries again.
+            SendLine(m_pending.socket, std::format(
+                R"({{"type":"error","reason":"pairing","pcId":"{}","name":"{}","message":"{}"}})",
+                JsonEscape(std::wstring_view(pairing::PcId())), JsonEscape(std::wstring_view(m_computerName)),
+                hello.code.empty() ? "This PC needs a pairing code." : "Wrong pairing code."));
+            ClosePending();
+            std::lock_guard guard(m_statusLock);
+            m_status.lastDisconnect = std::format(L"{} was turned away: {}.", hello.name,
+                hello.code.empty() ? L"no pairing code" : L"wrong pairing code");
+            return false;
+        }
+        const std::wstring& name = hello.name;
 
         // Newest phone wins: a reconnecting phone must not be locked out by its own stale connection.
         DropActive(L"Replaced by a new connection.", true);
 
         m_active = std::move(m_pending);
         m_pending = Connection{};
-        do
-        {
-            m_session = static_cast<uint32_t>(m_rng());
-        } while (m_session == 0);
-        m_arbiter.Force(Source::WiFi); // newest connection wins; a Bluetooth link hangs up on its own
+        m_session = protocol::NewSession(m_rng);
+        m_arbiter.Force(Source::WiFi); // newest connection wins; a Bluetooth or USB link hangs up on its own
         m_jitter.Reset();
         m_lastAudioTick = 0;
 
-        SendLine(m_active.socket, std::format(R"({{"type":"welcome","version":{},"name":"{}","pcId":"{}","udpPort":{},"session":{}}})",
-            kProtocolVersion, JsonEscape(std::wstring_view(m_computerName)), JsonEscape(std::wstring_view(pairing::PcId())),
-            m_port, m_session));
+        SendLine(m_active.socket, protocol::Welcome(m_computerName, m_session, m_port));
 
         std::lock_guard guard(m_statusLock);
         m_status.connected = true;
@@ -522,36 +464,27 @@ namespace phomic
 
     void StreamServer::HandleMessage(std::string const& line)
     {
-        try
+        const protocol::Message message = protocol::ParseMessage(line);
+        switch (message.type)
         {
-            JsonObject msg{ nullptr };
-            if (!JsonObject::TryParse(winrt::to_hstring(line), msg))
-            {
-                return;
-            }
-            const auto type = msg.GetNamedString(L"type", L"");
-            if (type == L"ping")
-            {
-                const auto id = static_cast<int64_t>(msg.GetNamedNumber(L"id", 0));
-                SendLine(m_active.socket, std::format(R"({{"type":"pong","id":{}}})", id));
-                const double rtt = msg.GetNamedNumber(L"rtt", -1);
-                std::lock_guard guard(m_statusLock);
-                m_status.rttMs = rtt;
-            }
-            else if (type == L"mute")
-            {
-                const bool muted = msg.GetNamedBoolean(L"muted", false);
-                std::lock_guard guard(m_statusLock);
-                m_status.muted = muted;
-            }
-            else if (type == L"bye")
-            {
-                DropActive(L"The iPhone disconnected.", false);
-            }
+        case protocol::Message::Type::Ping:
+        {
+            SendLine(m_active.socket, protocol::Pong(message.pingId));
+            std::lock_guard guard(m_statusLock);
+            m_status.rttMs = message.rttMs;
+            break;
         }
-        catch (winrt::hresult_error const&)
+        case protocol::Message::Type::Mute:
         {
-            // Ignore malformed messages.
+            std::lock_guard guard(m_statusLock);
+            m_status.muted = message.muted;
+            break;
+        }
+        case protocol::Message::Type::Bye:
+            DropActive(L"The iPhone disconnected.", false);
+            break;
+        default:
+            break;
         }
     }
 
@@ -578,7 +511,7 @@ namespace phomic
         }
         if (sendBye)
         {
-            SendLine(m_active.socket, R"({"type":"bye"})");
+            SendLine(m_active.socket, protocol::kBye);
         }
         CloseSocket(m_active.socket);
         m_active = Connection{};
@@ -603,32 +536,6 @@ namespace phomic
     {
         CloseSocket(m_pending.socket);
         m_pending = Connection{};
-    }
-
-    void StreamServer::SendLine(SOCKET socket, std::string const& json)
-    {
-        if (socket == INVALID_SOCKET)
-        {
-            return;
-        }
-        const std::string data = json + "\n";
-        const char* p = data.data();
-        int left = static_cast<int>(data.size());
-        for (int attempt = 0; left > 0 && attempt < 50; ++attempt)
-        {
-            const int n = send(socket, p, left, 0);
-            if (n == SOCKET_ERROR)
-            {
-                if (WSAGetLastError() == WSAEWOULDBLOCK)
-                {
-                    Sleep(1);
-                    continue;
-                }
-                return;
-            }
-            p += n;
-            left -= n;
-        }
     }
 
     // ---------------------------------------------------------------- DNS-SD

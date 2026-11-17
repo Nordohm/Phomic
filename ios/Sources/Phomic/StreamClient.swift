@@ -5,6 +5,9 @@ import os
 /// Talks to the Windows app: a TCP control connection (hello / pings / mute / bye)
 /// plus a UDP flow that carries the audio packets.
 ///
+/// Over USB (`adopt`) there's only the TCP connection, which the PC opened through the
+/// cable: the audio packets travel on it too, between the control lines.
+///
 /// All state lives on `queue`; every public method hops onto it.
 final class StreamClient: @unchecked Sendable {
     enum Event: Sendable {
@@ -18,6 +21,12 @@ final class StreamClient: @unchecked Sendable {
         /// `reason` is nil when we hung up ourselves. `canRetry` is false when the PC
         /// deliberately ended or refused the session.
         case disconnected(reason: String?, canRetry: Bool)
+        /// The PC ended the session because another connection took over ("bye" with
+        /// "reason":"switched"). Over USB the iPhone then stops waiting, or the two would take
+        /// turns pushing each other out.
+        case takenOver
+        /// The PC refused the session ("error"), e.g. different app versions. Retrying won't help.
+        case refused(String)
     }
 
     var onEvent: (@Sendable (Event) -> Void)?
@@ -32,6 +41,8 @@ final class StreamClient: @unchecked Sendable {
     private var session: UInt32 = 0
     private var sequence: UInt32 = 0
     private var streaming = false
+    /// USB: audio goes over the control connection.
+    private var inline = false
     private var muted = false
     private var serverName = ""
     private var serverId: String?
@@ -50,6 +61,17 @@ final class StreamClient: @unchecked Sendable {
         queue.async {
             self.pairingCode = code
             self.openControl(to: endpoint)
+        }
+    }
+
+    /// Takes over a connection the PC opened to this iPhone through the USB cable
+    /// (UsbListener), replacing any current one.
+    func adopt(_ connection: NWConnection) {
+        queue.async {
+            self.pairingCode = nil // USB doesn't use pairing codes
+            self.teardown()
+            self.inline = true
+            self.run(connection)
         }
     }
 
@@ -82,7 +104,7 @@ final class StreamClient: @unchecked Sendable {
     func send(frame: [Float]) {
         guard active.withLock({ $0 }) else { return }
         queue.async {
-            guard self.streaming, !self.muted, let audio = self.audio else { return }
+            guard self.streaming, !self.muted, let audio = self.inline ? self.control : self.audio else { return }
             var packet = Data(capacity: 12 + frame.count * 2)
             packet.append(contentsOf: WireProtocol.magic)
             withUnsafeBytes(of: self.session.littleEndian) { packet.append(contentsOf: $0) }
@@ -100,7 +122,6 @@ final class StreamClient: @unchecked Sendable {
 
     private func openControl(to endpoint: NWEndpoint) {
         teardown()
-        let gen = generation
 
         let tcp = NWProtocolTCP.Options()
         tcp.noDelay = true
@@ -111,7 +132,12 @@ final class StreamClient: @unchecked Sendable {
         parameters.includePeerToPeer = false
         parameters.serviceClass = .responsiveData
 
-        let connection = NWConnection(to: endpoint, using: parameters)
+        run(NWConnection(to: endpoint, using: parameters))
+    }
+
+    /// Starts the control connection: hello once it's ready, then read lines.
+    private func run(_ connection: NWConnection) {
+        let gen = generation
         control = connection
         connection.stateUpdateHandler = { [weak self] state in
             guard let self, gen == self.generation else { return }
@@ -167,6 +193,15 @@ final class StreamClient: @unchecked Sendable {
 
     private func handle(_ message: ControlMessage) {
         switch message.type {
+        case "welcome" where inline:
+            guard let session = message.session else {
+                fail("The PC sent an unexpected reply.", canRetry: false)
+                return
+            }
+            self.session = session
+            serverName = message.name ?? "PC"
+            serverId = message.pcId
+            startStreaming()
         case "welcome":
             guard let session = message.session, let port = message.udpPort,
                   let udpPort = NWEndpoint.Port(rawValue: UInt16(clamping: port)) else {
@@ -186,6 +221,9 @@ final class StreamClient: @unchecked Sendable {
             if let transport = message.transport {
                 onEvent?(.switchRequested(transport: transport))
             }
+        case "bye" where message.reason == "switched":
+            teardown()
+            onEvent?(.takenOver)
         case "bye":
             teardown()
             onEvent?(.disconnected(reason: "The PC ended the connection.", canRetry: false))
@@ -195,7 +233,7 @@ final class StreamClient: @unchecked Sendable {
                                       message: message.message ?? "This PC needs a pairing code."))
         case "error":
             teardown()
-            onEvent?(.disconnected(reason: message.message ?? "The PC refused the connection.", canRetry: false))
+            onEvent?(.refused(message.message ?? "The PC refused the connection."))
         default:
             break
         }
@@ -226,14 +264,7 @@ final class StreamClient: @unchecked Sendable {
             guard let self, gen == self.generation else { return }
             switch state {
             case .ready:
-                self.sequence = 0
-                self.streaming = true
-                self.active.withLock { $0 = true }
-                if self.muted {
-                    self.sendControl(.mute(true))
-                }
-                self.startPinging()
-                self.onEvent?(.connected(serverName: self.serverName, pcId: self.serverId))
+                self.startStreaming()
             case .failed(let error):
                 self.fail(Self.describe(error), canRetry: true)
             default:
@@ -241,6 +272,17 @@ final class StreamClient: @unchecked Sendable {
             }
         }
         connection.start(queue: queue)
+    }
+
+    private func startStreaming() {
+        sequence = 0
+        streaming = true
+        active.withLock { $0 = true }
+        if muted {
+            sendControl(.mute(true))
+        }
+        startPinging()
+        onEvent?(.connected(serverName: serverName, pcId: serverId))
     }
 
     // MARK: - Keepalive
@@ -291,6 +333,7 @@ final class StreamClient: @unchecked Sendable {
         audio = nil
         rxBuffer.removeAll()
         streaming = false
+        inline = false
         active.withLock { $0 = false }
         session = 0
         pingSentAt.removeAll()

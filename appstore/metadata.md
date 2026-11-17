@@ -24,23 +24,24 @@ Your iPhone as a PC microphone
 **Promotional Text** (170)
 
 ```
-Turn your iPhone into a wireless microphone for your PC. Pick it in any app, switch between Wi-Fi and Bluetooth while you talk, and mute right from the Lock Screen.
+Turn your iPhone into a microphone for your PC, over Wi-Fi, Bluetooth or a USB cable. Pick it in any app, switch while you talk, and mute from the Lock Screen.
 ```
 
 **Description** (4,000)
 
 ```
-Phomic turns your iPhone into a wireless microphone for your Windows PC.
+Phomic turns your iPhone into a microphone for your Windows PC, wirelessly or with a cable.
 
-Install the free Phomic app on your PC, open Phomic on your iPhone and tap your computer. Your iPhone's microphone then shows up on the PC as a microphone called "Phomic", so you can pick it in any app that uses one: voice chat, video calls, streaming and recording.
+Install the free Phomic app on your PC, open Phomic on your iPhone and tap your computer, or plug the iPhone in. Your iPhone's microphone then shows up on the PC as a microphone called "Phomic", so you can pick it in any app that uses one: voice chat, video calls, streaming and recording.
 
-WI-FI OR BLUETOOTH
+WI-FI, BLUETOOTH OR USB
 • Wi-Fi: uncompressed 48 kHz audio with low latency on your local network.
 • Bluetooth: no network needed, within about 10 meters of the PC.
-• Switch between them while you talk. The microphone stays on.
+• USB: plug the iPhone into the PC for the lowest latency. It connects by itself.
+• Switch between them while you talk.
 
 MUTE FROM ANYWHERE
-• One big button: green when you're live, red when you're muted.
+• One big button: green when you're live, red when you're muted. The screen glows with your voice.
 • A Live Activity on the Lock Screen and in the Dynamic Island, with its own mute button.
 • Muting fully releases the microphone.
 
@@ -49,19 +50,30 @@ SOUNDS LIKE YOUR IPHONE
 • Choose Standard, Voice Isolation or Wide Spectrum with the iPhone's Mic Mode.
 
 PRIVATE BY DESIGN
-• Audio goes straight from your iPhone to your PC, over your own network or Bluetooth. Nothing goes through the internet.
+• Audio goes straight from your iPhone to your PC, over your own network, Bluetooth or a cable. Nothing goes through the internet.
 • No account, no ads, no tracking.
 • An optional pairing code keeps other phones out.
 
 WHAT YOU NEED
 • A Windows 10 or 11 PC with the free Phomic app: github.com/Nordohm/Phomic
 • VB-CABLE, a free virtual audio driver by VB-Audio. The PC app shows you how to get it.
+• For USB: Apple Devices, Apple's free app from the Microsoft Store.
+```
+
+**What's New in This Version** (4,000)
+
+```
+• USB: plug your iPhone into your PC for the lowest latency. Pick the USB tab and Phomic on the PC connects by itself. Needs Phomic 1.1 for Windows and Apple's free Apple Devices app.
+• A new look: Wi-Fi, Bluetooth and USB as tabs, Liquid Glass on iOS 26, and the screen glows with your voice while you're live.
+• Clearer status: Live, Muted or Connecting, with your PC's name below.
+• The Live Activity goes away when you close Phomic.
+• Settings shows the app's version, and saved pairing codes are listed as Paired PCs.
 ```
 
 **Keywords** (100; words from the name and subtitle are already indexed)
 
 ```
-mic,wireless,windows,computer,laptop,desktop,voice,chat,stream,recording,bluetooth,wifi,podcast,call
+mic,wireless,windows,computer,laptop,voice,chat,stream,recording,bluetooth,wifi,usb,cable,podcast
 ```
 
 **Support URL**
@@ -105,7 +117,7 @@ Without the PC app, Phomic opens to its main screen and lists no computers.
 
 To test with a PC:
 1. Install Phomic on a Windows 10 or 11 PC. Follow its banner to install VB-CABLE, then click Set up.
-2. On the iPhone, choose Wi-Fi or Bluetooth and tap the PC under Computers.
+2. On the iPhone, pick the Wi-Fi or Bluetooth tab and tap the PC. For USB, install Apple Devices from the Microsoft Store on the PC, plug the iPhone in and pick the USB tab: the PC connects by itself.
 3. Speak: the level meter in the PC app moves, and the "Phomic" microphone works in any app on the PC.
 4. Tap the big button, or the Live Activity's button on the Lock Screen, to mute and unmute.
 

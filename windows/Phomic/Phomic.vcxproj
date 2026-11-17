@@ -127,6 +127,10 @@
     <ClInclude Include="Resampler.h" />
     <ClInclude Include="JsonUtil.h" />
     <ClInclude Include="BluetoothReceiver.h" />
+    <ClInclude Include="UsbReceiver.h" />
+    <ClInclude Include="AppleUsb.h" />
+    <ClInclude Include="Net.h" />
+    <ClInclude Include="PhoneProtocol.h" />
     <ClInclude Include="VirtualMic.h" />
     <ClInclude Include="CableOutput.h" />
     <ClInclude Include="Pairing.h" />
@@ -155,6 +159,9 @@
     <ClCompile Include="Settings.cpp" />
     <ClCompile Include="Resampler.cpp" />
     <ClCompile Include="BluetoothReceiver.cpp" />
+    <ClCompile Include="UsbReceiver.cpp" />
+    <ClCompile Include="AppleUsb.cpp" />
+    <ClCompile Include="PhoneProtocol.cpp" />
     <ClCompile Include="VirtualMic.cpp" />
     <ClCompile Include="CableOutput.cpp" />
     <ClCompile Include="TrayIcon.cpp" />
@@ -171,6 +178,9 @@
   </ItemGroup>
   <ItemGroup>
     <Image Include="Assets\Phomic.ico" />
+    <None Include="Assets\AppStoreBadge-Black.svg" />
+    <None Include="Assets\AppStoreBadge-White.svg" />
+    <None Include="Assets\AppStoreQrCode.jpg" />
   </ItemGroup>
   <ItemGroup>
     <Midl Include="MainWindow.idl">
