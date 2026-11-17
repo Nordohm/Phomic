@@ -105,13 +105,13 @@ The URLs only work once the repository is public.
 
 - **Sign-in required:** off. Phomic has no accounts.
 - **Contact information:** yours.
-- **Attachment:** a short screen recording of the whole flow (PC app, iPhone app, muting from the Lock
-  Screen). The reviewer probably has no Windows PC to test with.
+- **Attachment:** none so far; the notes offer a screen recording of the whole flow (PC app, iPhone app,
+  muting from the Lock Screen), since the reviewer probably has no Windows PC to test with.
 
 **Notes** (4,000)
 
 ```
-Phomic streams the iPhone's microphone to a Windows PC, where it appears as a microphone for other apps. It needs the free companion app on the PC (https://github.com/Nordohm/Phomic/releases) and VB-CABLE, a free virtual audio driver by VB-Audio that the PC app links to. The attached video shows the whole flow.
+Phomic streams the iPhone's microphone to a Windows PC, where it appears as a microphone for other apps. It needs the free companion app on the PC (https://github.com/Nordohm/Phomic/releases) and VB-CABLE, a free virtual audio driver by VB-Audio that the PC app links to. We're happy to send a video of the whole flow if that helps.
 
 Without the PC app, Phomic opens to its main screen and lists no computers.
 
