@@ -2,6 +2,18 @@
 
 Use an iPhone as a microphone for a Windows PC, over Wi-Fi or Bluetooth.
 
+<a href="https://apps.apple.com/app/phomic/id6835323092"><picture>
+  <source media="(prefers-color-scheme: dark)" srcset="appstore/badges/download-on-the-app-store-white.svg">
+  <img src="appstore/badges/download-on-the-app-store-black.svg" alt="Download on the App Store" height="40">
+</picture></a>
+
+- **iPhone:** [Phomic on the App Store](https://apps.apple.com/app/phomic/id6835323092), or scan the code with the
+  iPhone's camera.
+- **PC:** [Phomic for Windows](https://github.com/Nordohm/Phomic/releases/latest) (Windows 10 or 11), plus
+  [VB-CABLE](https://vb-audio.com/Cable/), a free driver by VB-Audio. See [Install](#install-windows).
+
+<img src="appstore/qr-code.png" alt="QR code: Phomic on the App Store" width="120">
+
 | Part | Tech | Location |
 |---|---|---|
 | Windows app (receiver) | WinUI 3, C++/WinRT, WASAPI, Winsock, DNS-SD, Bluetooth LE (GATT server) | [`windows/`](windows/) |
@@ -47,8 +59,8 @@ Wi-Fi and Bluetooth are equals, and only one is used at a time:
    download VB-CABLE, unzip it, run `VBCABLE_Setup_x64.exe` as administrator and click *Install Driver*
    (restart if Windows asks). Back in Phomic, **Set up** names it "Phomic".
 3. When Windows Firewall asks, allow Phomic on **private networks**.
-4. Install Phomic on your iPhone (see [iOS app](#ios-app)) and pick your PC. In Discord, Teams, OBS and so on,
-   choose the microphone **Phomic**.
+4. Install [Phomic from the App Store](https://apps.apple.com/app/phomic/id6835323092) on your iPhone (iOS 18 or
+   later) and pick your PC. In Discord, Teams, OBS and so on, choose the microphone **Phomic**.
 
 Uninstalling (*Settings › Apps*) also gives the VB-CABLE devices their original names back and removes Phomic's
 settings. VB-CABLE itself stays installed; remove it with its own setup program if you don't need it.
@@ -155,6 +167,9 @@ Code map:
 | `Settings.*` | Preferences in `HKCU\Software\Phomic` |
 
 ## iOS app
+
+Get it on the [App Store](https://apps.apple.com/app/phomic/id6835323092) (iPhone, iOS 18 or later). To build it
+yourself:
 
 Built with [xtool](https://github.com/xtool-org/xtool): `ios/` is a SwiftPM package (`Package.swift`) plus
 `xtool.yml`, not an Xcode project. Install xtool (see its README), then in `ios/`:
