@@ -12,6 +12,7 @@ namespace phomic
         constexpr UINT kIconId = 1;
         constexpr UINT kCallbackMessage = WM_APP + 1;
         constexpr UINT kShowMessage = WM_APP + 2;   // sent by a second copy of Phomic
+        constexpr UINT kQuitMessage = WM_APP + 3;   // sent by Phomic --quit (the uninstaller)
         constexpr UINT_PTR kOpenCommand = 1;
         constexpr UINT_PTR kQuitCommand = 2;
 
@@ -104,6 +105,50 @@ namespace phomic
         return true;
     }
 
+    bool TrayIcon::QuitExisting(std::wstring const& exePath)
+    {
+        // Collect first: a window that closes would end FindWindowExW's walk.
+        std::vector<HWND> windows;
+        for (HWND window = nullptr; (window = FindWindowExW(nullptr, window, kWindowClass, nullptr)) != nullptr;)
+        {
+            windows.push_back(window);
+        }
+        bool allGone = true;
+        for (const HWND window : windows)
+        {
+            DWORD processId = 0;
+            GetWindowThreadProcessId(window, &processId);
+            if (processId == 0 || processId == GetCurrentProcessId())
+            {
+                continue;
+            }
+            HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | SYNCHRONIZE | PROCESS_TERMINATE, FALSE, processId);
+            if (!process)
+            {
+                process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | SYNCHRONIZE, FALSE, processId);
+            }
+            if (!process)
+            {
+                continue;
+            }
+            wchar_t path[MAX_PATH * 2];
+            DWORD length = ARRAYSIZE(path);
+            const bool ours = QueryFullProcessImageNameW(process, 0, path, &length) &&
+                CompareStringOrdinal(path, static_cast<int>(length), exePath.c_str(), static_cast<int>(exePath.size()), TRUE) == CSTR_EQUAL;
+            if (ours)
+            {
+                PostMessageW(window, kQuitMessage, 0, 0);
+                if (WaitForSingleObject(process, 5000) != WAIT_OBJECT_0)
+                {
+                    TerminateProcess(process, 1);
+                    allGone = WaitForSingleObject(process, 2000) == WAIT_OBJECT_0 && allGone;
+                }
+            }
+            CloseHandle(process);
+        }
+        return allGone;
+    }
+
     LRESULT CALLBACK TrayIcon::WindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam)
     {
         if (message == WM_NCCREATE)
@@ -141,6 +186,11 @@ namespace phomic
         if (message == kShowMessage)
         {
             m_onCommand(Command::Open);
+            return 0;
+        }
+        if (message == kQuitMessage)
+        {
+            m_onCommand(Command::Quit);
             return 0;
         }
         if (message == m_taskbarCreated && m_taskbarCreated != 0)

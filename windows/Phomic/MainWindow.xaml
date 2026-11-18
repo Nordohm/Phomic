@@ -13,457 +13,580 @@
         <MicaBackdrop />
     </Window.SystemBackdrop>
 
-    <ScrollViewer x:Name="RootScroller" VerticalScrollBarVisibility="Auto">
-        <!--  Width set in code (see ResizeForDpi)  -->
-        <StackPanel
-            x:Name="RootPanel"
-            Margin="24,20,24,24"
-            HorizontalAlignment="Center"
-            Spacing="12">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
 
-            <InfoBar
-                x:Name="ErrorBar"
-                IsClosable="True"
-                Severity="Error"
-                Visibility="Collapsed" />
+        <!--
+            The title bar, drawn here (ExtendsContentIntoTitleBar) so it can show the glyph while the
+            window's icon, which the taskbar shows, is the squircle.
+        -->
+        <Grid x:Name="AppTitleBar" Height="32">
+            <Image
+                Width="16"
+                Height="16"
+                Margin="12,0,0,0"
+                HorizontalAlignment="Left"
+                VerticalAlignment="Center"
+                Source="ms-appx:///Assets/Phomic.svg" />
+            <TextBlock
+                x:Name="AppTitleText"
+                Margin="40,0,0,0"
+                VerticalAlignment="Center"
+                Style="{StaticResource CaptionTextBlockStyle}"
+                Text="Phomic" />
+        </Grid>
 
-            <InfoBar
-                x:Name="MicBar"
-                IsClosable="False"
-                Visibility="Collapsed"
-                Severity="Informational">
-                <InfoBar.ActionButton>
-                    <Button
-                        x:Name="MicSetupButton"
-                        HorizontalAlignment="Left"
-                        Click="MicSetupButton_Click"
-                        Style="{StaticResource AccentButtonStyle}" />
-                </InfoBar.ActionButton>
-            </InfoBar>
+        <ScrollViewer
+            x:Name="RootScroller"
+            Grid.Row="1"
+            VerticalScrollBarVisibility="Auto">
+            <!--  Width set in code (see ResizeForDpi)  -->
+            <StackPanel
+                x:Name="RootPanel"
+                Margin="24,20,24,24"
+                HorizontalAlignment="Center"
+                Spacing="12">
 
-            <InfoBar
-                x:Name="DefaultOutputBar"
-                Visibility="Collapsed"
-                Title="Your PC's sound is going into the microphone"
-                IsClosable="True"
-                Message="Windows uses “Phomic (internal)” as its default output, so everything you'd hear also goes into the Phomic microphone. Pick your speakers or headphones in Settings › System › Sound."
-                Severity="Warning" />
+                <InfoBar
+                    x:Name="ErrorBar"
+                    IsClosable="True"
+                    Severity="Error"
+                    Visibility="Collapsed" />
 
-            <!--  A newer Phomic for Windows is out (CheckForUpdate)  -->
-            <InfoBar
-                x:Name="UpdateBar"
-                IsClosable="True"
-                Message="Updating keeps your settings."
-                Severity="Informational"
-                Visibility="Collapsed">
-                <InfoBar.ActionButton>
-                    <Button
-                        HorizontalAlignment="Left"
-                        Click="UpdateButton_Click"
-                        Content="Download"
-                        Style="{StaticResource AccentButtonStyle}" />
-                </InfoBar.ActionButton>
-            </InfoBar>
+                <InfoBar
+                    x:Name="MicBar"
+                    IsClosable="False"
+                    Visibility="Collapsed"
+                    Severity="Informational">
+                    <InfoBar.ActionButton>
+                        <Button
+                            x:Name="MicSetupButton"
+                            HorizontalAlignment="Left"
+                            Click="MicSetupButton_Click"
+                            Style="{StaticResource AccentButtonStyle}" />
+                    </InfoBar.ActionButton>
+                </InfoBar>
 
-            <!--  Connection  -->
-            <Border Style="{StaticResource CardStyle}">
-                <Grid ColumnSpacing="16">
+                <InfoBar
+                    x:Name="DefaultOutputBar"
+                    Visibility="Collapsed"
+                    Title="Your PC's sound is going into the microphone"
+                    IsClosable="True"
+                    Message="Windows uses “Phomic (internal)” as its default output, so everything you'd hear also goes into the Phomic microphone. Pick your speakers or headphones in Settings › System › Sound."
+                    Severity="Warning" />
+
+                <!--  A newer Phomic for Windows is out (CheckForUpdate)  -->
+                <InfoBar
+                    x:Name="UpdateBar"
+                    IsClosable="True"
+                    Message="Updating keeps your settings."
+                    Severity="Informational"
+                    Visibility="Collapsed">
+                    <InfoBar.ActionButton>
+                        <Button
+                            HorizontalAlignment="Left"
+                            Click="UpdateButton_Click"
+                            Content="Download"
+                            Style="{StaticResource AccentButtonStyle}" />
+                    </InfoBar.ActionButton>
+                </InfoBar>
+
+                <!--  Connection  -->
+                <Border Style="{StaticResource CardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <Grid Width="48" Height="48" VerticalAlignment="Center">
+                            <Grid x:Name="IdleBadge">
+                                <Ellipse Fill="{ThemeResource ControlAltFillColorTertiaryBrush}" />
+                                <FontIcon
+                                    FontSize="20"
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                    Glyph="&#xE8EA;" />
+                            </Grid>
+                            <Grid x:Name="LiveBadge" Visibility="Collapsed">
+                                <Ellipse Fill="{ThemeResource AccentFillColorDefaultBrush}" />
+                                <FontIcon
+                                    FontSize="20"
+                                    Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}"
+                                    Glyph="&#xE720;" />
+                            </Grid>
+                        </Grid>
+
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock
+                                x:Name="StatusTitle"
+                                Style="{StaticResource BodyStrongTextBlockStyle}"
+                                Text="Waiting for your iPhone"
+                                TextWrapping="Wrap" />
+                            <TextBlock
+                                x:Name="StatusDetail"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                TextWrapping="Wrap" />
+                        </StackPanel>
+
+                        <!--  While connected: Disconnect. Otherwise: where to get the iPhone app.  -->
+                        <Button
+                            x:Name="DisconnectButton"
+                            Grid.Column="2"
+                            VerticalAlignment="Center"
+                            Click="DisconnectButton_Click"
+                            Content="Disconnect"
+                            Visibility="Collapsed" />
+                        <!--  Opens the App Store QR code: the app goes on the iPhone, not on this PC  -->
+                        <HyperlinkButton
+                            x:Name="GetIPhoneAppLink"
+                            Grid.Column="2"
+                            Padding="0"
+                            VerticalAlignment="Center"
+                            AutomationProperties.Name="Download Phomic for iPhone on the App Store"
+                            Click="GetIPhoneAppLink_Click"
+                            ToolTipService.ToolTip="Get Phomic for iPhone: scan a code with the iPhone">
+                            <Image x:Name="AppStoreBadge" Height="48" Stretch="Uniform" />
+                        </HyperlinkButton>
+                    </Grid>
+                </Border>
+
+                <!--  Wi-Fi, Bluetooth and USB, one above the other  -->
+                <Border Style="{StaticResource CardStyle}">
+                    <StackPanel Spacing="14">
+                        <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Connection" />
+
+                        <Grid ColumnSpacing="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <!--  The connection in use: highlighted, with an accent mark like a selected item  -->
+                            <Border
+                                x:Name="WiFiHighlight"
+                                Grid.ColumnSpan="4"
+                                Margin="-10,-6"
+                                Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+                                CornerRadius="4"
+                                Visibility="Collapsed" />
+                            <Rectangle
+                                x:Name="WiFiMark"
+                                Width="3"
+                                Height="16"
+                                Margin="-7,0,0,0"
+                                HorizontalAlignment="Left"
+                                VerticalAlignment="Center"
+                                Fill="{ThemeResource AccentFillColorDefaultBrush}"
+                                RadiusX="1.5"
+                                RadiusY="1.5"
+                                Visibility="Collapsed" />
+                            <FontIcon
+                                x:Name="WiFiIcon"
+                                Width="24"
+                                VerticalAlignment="Center"
+                                FontSize="18"
+                                Glyph="&#xE701;" />
+                            <FontIcon
+                                x:Name="WiFiActiveIcon"
+                                Width="24"
+                                VerticalAlignment="Center"
+                                FontSize="18"
+                                Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
+                                Glyph="&#xE701;"
+                                Visibility="Collapsed" />
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <TextBlock Text="Wi-Fi" />
+                                <TextBlock
+                                    x:Name="WiFiText"
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                    Style="{StaticResource CaptionTextBlockStyle}"
+                                    TextWrapping="Wrap" />
+                            </StackPanel>
+                            <!--  At most one of these two shows: Switch can't work while the firewall blocks Wi-Fi.  -->
+                            <Button
+                                x:Name="SwitchToWiFiButton"
+                                Grid.Column="2"
+                                VerticalAlignment="Center"
+                                AutomationProperties.Name="Switch to Wi-Fi"
+                                Click="SwitchToWiFiButton_Click"
+                                Content="Switch"
+                                Visibility="Collapsed" />
+                            <Button
+                                x:Name="WiFiAllowButton"
+                                Grid.Column="2"
+                                VerticalAlignment="Center"
+                                AutomationProperties.Name="Allow through Windows Firewall"
+                                Click="WiFiAllowButton_Click"
+                                Content="Allow"
+                                ToolTipService.ToolTip="Asks for administrator rights"
+                                Visibility="Collapsed" />
+                            <ToggleSwitch
+                                x:Name="WiFiToggle"
+                                Grid.Column="3"
+                                MinWidth="0"
+                                VerticalAlignment="Center"
+                                OffContent=""
+                                OnContent=""
+                                Toggled="WiFiToggle_Toggled" />
+                        </Grid>
+
+                        <Grid ColumnSpacing="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <!--  The connection in use: highlighted, with an accent mark like a selected item  -->
+                            <Border
+                                x:Name="BluetoothHighlight"
+                                Grid.ColumnSpan="4"
+                                Margin="-10,-6"
+                                Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+                                CornerRadius="4"
+                                Visibility="Collapsed" />
+                            <Rectangle
+                                x:Name="BluetoothMark"
+                                Width="3"
+                                Height="16"
+                                Margin="-7,0,0,0"
+                                HorizontalAlignment="Left"
+                                VerticalAlignment="Center"
+                                Fill="{ThemeResource AccentFillColorDefaultBrush}"
+                                RadiusX="1.5"
+                                RadiusY="1.5"
+                                Visibility="Collapsed" />
+                            <FontIcon
+                                x:Name="BluetoothIcon"
+                                Width="24"
+                                VerticalAlignment="Center"
+                                FontSize="18"
+                                Glyph="&#xE702;" />
+                            <FontIcon
+                                x:Name="BluetoothActiveIcon"
+                                Width="24"
+                                VerticalAlignment="Center"
+                                FontSize="18"
+                                Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
+                                Glyph="&#xE702;"
+                                Visibility="Collapsed" />
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <TextBlock Text="Bluetooth" />
+                                <TextBlock
+                                    x:Name="BluetoothText"
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                    Style="{StaticResource CaptionTextBlockStyle}"
+                                    TextWrapping="Wrap" />
+                            </StackPanel>
+                            <Button
+                                x:Name="SwitchToBluetoothButton"
+                                Grid.Column="2"
+                                VerticalAlignment="Center"
+                                AutomationProperties.Name="Switch to Bluetooth"
+                                Click="SwitchToBluetoothButton_Click"
+                                Content="Switch"
+                                Visibility="Collapsed" />
+                            <ToggleSwitch
+                                x:Name="BluetoothToggle"
+                                Grid.Column="3"
+                                MinWidth="0"
+                                VerticalAlignment="Center"
+                                OffContent=""
+                                OnContent=""
+                                Toggled="BluetoothToggle_Toggled" />
+                        </Grid>
+
+                        <Grid ColumnSpacing="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <!--  The connection in use: highlighted, with an accent mark like a selected item  -->
+                            <Border
+                                x:Name="UsbHighlight"
+                                Grid.ColumnSpan="4"
+                                Margin="-10,-6"
+                                Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+                                CornerRadius="4"
+                                Visibility="Collapsed" />
+                            <Rectangle
+                                x:Name="UsbMark"
+                                Width="3"
+                                Height="16"
+                                Margin="-7,0,0,0"
+                                HorizontalAlignment="Left"
+                                VerticalAlignment="Center"
+                                Fill="{ThemeResource AccentFillColorDefaultBrush}"
+                                RadiusX="1.5"
+                                RadiusY="1.5"
+                                Visibility="Collapsed" />
+                            <FontIcon
+                                x:Name="UsbIcon"
+                                Width="24"
+                                VerticalAlignment="Center"
+                                FontSize="18"
+                                Glyph="&#xE88E;" />
+                            <FontIcon
+                                x:Name="UsbActiveIcon"
+                                Width="24"
+                                VerticalAlignment="Center"
+                                FontSize="18"
+                                Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
+                                Glyph="&#xE88E;"
+                                Visibility="Collapsed" />
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <TextBlock Text="USB" />
+                                <TextBlock
+                                    x:Name="UsbText"
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                    Style="{StaticResource CaptionTextBlockStyle}"
+                                    TextWrapping="Wrap" />
+                            </StackPanel>
+                            <!--  At most one of these two shows. The second is the fix for what's wrong with USB, if any.  -->
+                            <Button
+                                x:Name="SwitchToUsbButton"
+                                Grid.Column="2"
+                                VerticalAlignment="Center"
+                                AutomationProperties.Name="Switch to USB"
+                                Click="SwitchToUsbButton_Click"
+                                Content="Switch"
+                                Visibility="Collapsed" />
+                            <Button
+                                x:Name="UsbActionButton"
+                                Grid.Column="2"
+                                VerticalAlignment="Center"
+                                Click="UsbActionButton_Click"
+                                Visibility="Collapsed" />
+                            <ToggleSwitch
+                                x:Name="UsbToggle"
+                                Grid.Column="3"
+                                MinWidth="0"
+                                VerticalAlignment="Center"
+                                OffContent=""
+                                OnContent=""
+                                Toggled="UsbToggle_Toggled" />
+                        </Grid>
+
+                        <!--  A setting for both connections, not a third kind of connection  -->
+                        <Rectangle Height="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" />
+
+                        <Grid ColumnSpacing="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel VerticalAlignment="Center">
+                                <CheckBox
+                                    x:Name="PairingCheck"
+                                    Click="PairingCheck_Click"
+                                    Content="Require a pairing code" />
+                                <TextBlock
+                                    x:Name="PairingText"
+                                    Margin="28,-4,0,0"
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                    Style="{StaticResource CaptionTextBlockStyle}"
+                                    TextWrapping="Wrap" />
+                            </StackPanel>
+                            <!--  The code itself, and a button for a new one  -->
+                            <TextBlock
+                                x:Name="PairingCodeText"
+                                Grid.Column="1"
+                                VerticalAlignment="Center"
+                                AutomationProperties.Name="Pairing code"
+                                CharacterSpacing="200"
+                                IsTextSelectionEnabled="True"
+                                Style="{StaticResource SubtitleTextBlockStyle}"
+                                Visibility="Collapsed" />
+                            <Button
+                                x:Name="NewCodeButton"
+                                Grid.Column="2"
+                                VerticalAlignment="Center"
+                                AutomationProperties.Name="New code"
+                                Click="NewCodeButton_Click"
+                                ToolTipService.ToolTip="New code (every iPhone asks for it again)"
+                                Visibility="Collapsed">
+                                <FontIcon FontSize="16" Glyph="&#xE72C;" />
+                            </Button>
+                        </Grid>
+
+                        <StackPanel>
+                            <HyperlinkButton
+                                x:Name="DetailsButton"
+                                Padding="0"
+                                Click="DetailsButton_Click"
+                                Content="Show details" />
+                            <StackPanel
+                                x:Name="DetailsPanel"
+                                Margin="0,8,0,0"
+                                Spacing="16"
+                                Visibility="Collapsed">
+                                <!--  Rows are label / value pairs, filled in by UpdateDetails  -->
+                                <StackPanel x:Name="StreamSection" Spacing="6">
+                                    <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Stream" />
+                                    <Grid
+                                        x:Name="StreamGrid"
+                                        ColumnSpacing="16"
+                                        RowSpacing="4">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="104" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                    </Grid>
+                                </StackPanel>
+                                <StackPanel Spacing="6">
+                                    <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="This PC" />
+                                    <Grid
+                                        x:Name="PcGrid"
+                                        ColumnSpacing="16"
+                                        RowSpacing="4">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="104" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                    </Grid>
+                                </StackPanel>
+                            </StackPanel>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!--  Level and gain  -->
+                <Border Style="{StaticResource CardStyle}">
+                    <StackPanel Spacing="10">
+                        <Grid>
+                            <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Microphone level" />
+                            <TextBlock
+                                x:Name="LevelText"
+                                HorizontalAlignment="Right"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Text="" />
+                        </Grid>
+                        <Grid
+                            Height="8"
+                            Background="{ThemeResource ControlAltFillColorTertiaryBrush}"
+                            CornerRadius="4">
+                            <Border
+                                Background="{ThemeResource AccentFillColorDefaultBrush}"
+                                CornerRadius="4"
+                                RenderTransformOrigin="0,0.5">
+                                <Border.RenderTransform>
+                                    <ScaleTransform x:Name="LevelScale" ScaleX="0" />
+                                </Border.RenderTransform>
+                            </Border>
+                        </Grid>
+                        <Grid ColumnSpacing="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="Automatic gain" />
+                                <TextBlock
+                                    x:Name="GainText"
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                    Style="{StaticResource CaptionTextBlockStyle}"
+                                    TextWrapping="Wrap" />
+                            </StackPanel>
+                            <ToggleSwitch
+                                x:Name="AutoGainToggle"
+                                Grid.Column="1"
+                                MinWidth="0"
+                                VerticalAlignment="Center"
+                                OffContent=""
+                                OnContent=""
+                                Toggled="AutoGainToggle_Toggled" />
+                        </Grid>
+                        <!--  Only with automatic gain off. Range and end labels set in code.  -->
+                        <StackPanel x:Name="ManualGainPanel">
+                            <Slider
+                                x:Name="GainSlider"
+                                Header="Gain"
+                                StepFrequency="1"
+                                TickFrequency="6"
+                                TickPlacement="Outside"
+                                ValueChanged="GainSlider_ValueChanged" />
+                            <Grid>
+                                <TextBlock
+                                    x:Name="GainMinText"
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                    Style="{StaticResource CaptionTextBlockStyle}" />
+                                <TextBlock
+                                    x:Name="GainMaxText"
+                                    HorizontalAlignment="Right"
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                    Style="{StaticResource CaptionTextBlockStyle}" />
+                            </Grid>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!--  Output  -->
+                <Border Style="{StaticResource CardStyle}">
+                    <StackPanel Spacing="12">
+                        <ComboBox
+                            x:Name="OutputCombo"
+                            HorizontalAlignment="Stretch"
+                            Header="Play the iPhone's audio into"
+                            PlaceholderText="No playback devices found"
+                            SelectionChanged="OutputCombo_SelectionChanged" />
+                        <ComboBox
+                            x:Name="BufferCombo"
+                            HorizontalAlignment="Stretch"
+                            Header="Buffering"
+                            SelectionChanged="BufferCombo_SelectionChanged">
+                            <x:String>Automatic</x:String>
+                            <x:String>Low latency (30 ms)</x:String>
+                            <x:String>Balanced (60 ms)</x:String>
+                            <x:String>Stable (120 ms)</x:String>
+                        </ComboBox>
+                    </StackPanel>
+                </Border>
+
+                <!--  App  -->
+                <Border Style="{StaticResource CardStyle}">
+                    <StackPanel>
+                        <CheckBox
+                            x:Name="CloseToTrayCheck"
+                            Click="CloseToTrayCheck_Click"
+                            Content="Keep app running in tray when closing" />
+                        <CheckBox
+                            x:Name="StartupCheck"
+                            Click="StartupCheck_Click"
+                            Content="Launch app in tray when Windows starts" />
+                    </StackPanel>
+                </Border>
+
+                <!--  Footer: the support link. VB-CABLE's credit is under Show details (This PC).  -->
+                <Grid Margin="16,0,4,0" ColumnSpacing="12">
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-
-                    <Grid Width="48" Height="48" VerticalAlignment="Center">
-                        <Grid x:Name="IdleBadge">
-                            <Ellipse Fill="{ThemeResource ControlAltFillColorTertiaryBrush}" />
-                            <FontIcon
-                                FontSize="20"
-                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                Glyph="&#xE8EA;" />
-                        </Grid>
-                        <Grid x:Name="LiveBadge" Visibility="Collapsed">
-                            <Ellipse Fill="{ThemeResource AccentFillColorDefaultBrush}" />
-                            <FontIcon
-                                FontSize="20"
-                                Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}"
-                                Glyph="&#xE720;" />
-                        </Grid>
-                    </Grid>
-
-                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
-                        <TextBlock
-                            x:Name="StatusTitle"
-                            Style="{StaticResource BodyStrongTextBlockStyle}"
-                            Text="Waiting for your iPhone"
-                            TextWrapping="Wrap" />
-                        <TextBlock
-                            x:Name="StatusDetail"
-                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                            TextWrapping="Wrap" />
-                    </StackPanel>
-
-                    <!--  While connected: Disconnect. Otherwise: where to get the iPhone app.  -->
-                    <Button
-                        x:Name="DisconnectButton"
-                        Grid.Column="2"
+                    <TextBlock
                         VerticalAlignment="Center"
-                        Click="DisconnectButton_Click"
-                        Content="Disconnect"
-                        Visibility="Collapsed" />
-                    <!--  Opens the App Store QR code: the app goes on the iPhone, not on this PC  -->
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Style="{StaticResource CaptionTextBlockStyle}"
+                        TextWrapping="Wrap"><Hyperlink NavigateUri="https://nordohm.com/Phomic" UnderlineStyle="None">Phomic</Hyperlink><Run x:Name="FooterText" /></TextBlock>
                     <HyperlinkButton
-                        x:Name="GetIPhoneAppLink"
-                        Grid.Column="2"
-                        Padding="0"
-                        VerticalAlignment="Center"
-                        AutomationProperties.Name="Download Phomic for iPhone on the App Store"
-                        Click="GetIPhoneAppLink_Click"
-                        ToolTipService.ToolTip="Get Phomic for iPhone: scan a code with the iPhone">
-                        <Image x:Name="AppStoreBadge" Height="48" Stretch="Uniform" />
+                        Grid.Column="1"
+                        NavigateUri="https://buymeacoffee.com/nordohm"
+                        ToolTipService.ToolTip="buymeacoffee.com/nordohm">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <TextBlock Text="☕" />
+                            <TextBlock Text="Buy me a coffee" />
+                        </StackPanel>
                     </HyperlinkButton>
                 </Grid>
-            </Border>
 
-            <!--  Wi-Fi, Bluetooth and USB, one above the other  -->
-            <Border Style="{StaticResource CardStyle}">
-                <StackPanel Spacing="14">
-                    <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Connection" />
-
-                    <Grid ColumnSpacing="12">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <FontIcon
-                            Width="24"
-                            VerticalAlignment="Center"
-                            FontSize="18"
-                            Glyph="&#xE701;" />
-                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                            <TextBlock Text="Wi-Fi" />
-                            <TextBlock
-                                x:Name="WiFiText"
-                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                Style="{StaticResource CaptionTextBlockStyle}"
-                                TextWrapping="Wrap" />
-                        </StackPanel>
-                        <Button
-                            x:Name="SwitchToWiFiButton"
-                            Grid.Column="2"
-                            VerticalAlignment="Center"
-                            AutomationProperties.Name="Switch to Wi-Fi"
-                            Click="SwitchToWiFiButton_Click"
-                            Content="Switch"
-                            Visibility="Collapsed" />
-                        <ToggleSwitch
-                            x:Name="WiFiToggle"
-                            Grid.Column="3"
-                            MinWidth="0"
-                            VerticalAlignment="Center"
-                            OffContent=""
-                            OnContent=""
-                            Toggled="WiFiToggle_Toggled" />
-                    </Grid>
-
-                    <Grid ColumnSpacing="12">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <FontIcon
-                            Width="24"
-                            VerticalAlignment="Center"
-                            FontSize="18"
-                            Glyph="&#xE702;" />
-                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                            <TextBlock Text="Bluetooth" />
-                            <TextBlock
-                                x:Name="BluetoothText"
-                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                Style="{StaticResource CaptionTextBlockStyle}"
-                                TextWrapping="Wrap" />
-                        </StackPanel>
-                        <Button
-                            x:Name="SwitchToBluetoothButton"
-                            Grid.Column="2"
-                            VerticalAlignment="Center"
-                            AutomationProperties.Name="Switch to Bluetooth"
-                            Click="SwitchToBluetoothButton_Click"
-                            Content="Switch"
-                            Visibility="Collapsed" />
-                        <ToggleSwitch
-                            x:Name="BluetoothToggle"
-                            Grid.Column="3"
-                            MinWidth="0"
-                            VerticalAlignment="Center"
-                            OffContent=""
-                            OnContent=""
-                            Toggled="BluetoothToggle_Toggled" />
-                    </Grid>
-
-                    <Grid ColumnSpacing="12">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <FontIcon
-                            Width="24"
-                            VerticalAlignment="Center"
-                            FontSize="18"
-                            Glyph="&#xE88E;" />
-                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                            <TextBlock Text="USB" />
-                            <TextBlock
-                                x:Name="UsbText"
-                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                Style="{StaticResource CaptionTextBlockStyle}"
-                                TextWrapping="Wrap" />
-                        </StackPanel>
-                        <!--  At most one of these two shows. The second is the fix for what's wrong with USB, if any.  -->
-                        <Button
-                            x:Name="SwitchToUsbButton"
-                            Grid.Column="2"
-                            VerticalAlignment="Center"
-                            AutomationProperties.Name="Switch to USB"
-                            Click="SwitchToUsbButton_Click"
-                            Content="Switch"
-                            Visibility="Collapsed" />
-                        <Button
-                            x:Name="UsbActionButton"
-                            Grid.Column="2"
-                            VerticalAlignment="Center"
-                            Click="UsbActionButton_Click"
-                            Visibility="Collapsed" />
-                        <ToggleSwitch
-                            x:Name="UsbToggle"
-                            Grid.Column="3"
-                            MinWidth="0"
-                            VerticalAlignment="Center"
-                            OffContent=""
-                            OnContent=""
-                            Toggled="UsbToggle_Toggled" />
-                    </Grid>
-
-                    <!--  A setting for both connections, not a third kind of connection  -->
-                    <Rectangle Height="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" />
-
-                    <Grid ColumnSpacing="12">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <StackPanel VerticalAlignment="Center">
-                            <CheckBox
-                                x:Name="PairingCheck"
-                                Click="PairingCheck_Click"
-                                Content="Require a pairing code" />
-                            <TextBlock
-                                x:Name="PairingText"
-                                Margin="28,-4,0,0"
-                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                Style="{StaticResource CaptionTextBlockStyle}"
-                                TextWrapping="Wrap" />
-                        </StackPanel>
-                        <!--  The code itself, and a button for a new one  -->
-                        <TextBlock
-                            x:Name="PairingCodeText"
-                            Grid.Column="1"
-                            VerticalAlignment="Center"
-                            AutomationProperties.Name="Pairing code"
-                            CharacterSpacing="200"
-                            IsTextSelectionEnabled="True"
-                            Style="{StaticResource SubtitleTextBlockStyle}"
-                            Visibility="Collapsed" />
-                        <Button
-                            x:Name="NewCodeButton"
-                            Grid.Column="2"
-                            VerticalAlignment="Center"
-                            AutomationProperties.Name="New code"
-                            Click="NewCodeButton_Click"
-                            ToolTipService.ToolTip="New code (every iPhone asks for it again)"
-                            Visibility="Collapsed">
-                            <FontIcon FontSize="16" Glyph="&#xE72C;" />
-                        </Button>
-                    </Grid>
-
-                    <StackPanel>
-                        <HyperlinkButton
-                            x:Name="DetailsButton"
-                            Padding="0"
-                            Click="DetailsButton_Click"
-                            Content="Show details" />
-                        <StackPanel
-                            x:Name="DetailsPanel"
-                            Margin="0,8,0,0"
-                            Spacing="16"
-                            Visibility="Collapsed">
-                            <!--  Rows are label / value pairs, filled in by UpdateDetails  -->
-                            <StackPanel x:Name="StreamSection" Spacing="6">
-                                <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Stream" />
-                                <Grid
-                                    x:Name="StreamGrid"
-                                    ColumnSpacing="16"
-                                    RowSpacing="4">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="104" />
-                                        <ColumnDefinition Width="*" />
-                                    </Grid.ColumnDefinitions>
-                                </Grid>
-                            </StackPanel>
-                            <StackPanel Spacing="6">
-                                <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="This PC" />
-                                <Grid
-                                    x:Name="PcGrid"
-                                    ColumnSpacing="16"
-                                    RowSpacing="4">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="104" />
-                                        <ColumnDefinition Width="*" />
-                                    </Grid.ColumnDefinitions>
-                                </Grid>
-                            </StackPanel>
-                        </StackPanel>
-                    </StackPanel>
-                </StackPanel>
-            </Border>
-
-            <!--  Level and gain  -->
-            <Border Style="{StaticResource CardStyle}">
-                <StackPanel Spacing="10">
-                    <Grid>
-                        <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Microphone level" />
-                        <TextBlock
-                            x:Name="LevelText"
-                            HorizontalAlignment="Right"
-                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                            Text="" />
-                    </Grid>
-                    <Grid
-                        Height="8"
-                        Background="{ThemeResource ControlAltFillColorTertiaryBrush}"
-                        CornerRadius="4">
-                        <Border
-                            Background="{ThemeResource AccentFillColorDefaultBrush}"
-                            CornerRadius="4"
-                            RenderTransformOrigin="0,0.5">
-                            <Border.RenderTransform>
-                                <ScaleTransform x:Name="LevelScale" ScaleX="0" />
-                            </Border.RenderTransform>
-                        </Border>
-                    </Grid>
-                    <Grid ColumnSpacing="12">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <StackPanel VerticalAlignment="Center">
-                            <TextBlock Text="Automatic gain" />
-                            <TextBlock
-                                x:Name="GainText"
-                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                Style="{StaticResource CaptionTextBlockStyle}"
-                                TextWrapping="Wrap" />
-                        </StackPanel>
-                        <ToggleSwitch
-                            x:Name="AutoGainToggle"
-                            Grid.Column="1"
-                            MinWidth="0"
-                            VerticalAlignment="Center"
-                            OffContent=""
-                            OnContent=""
-                            Toggled="AutoGainToggle_Toggled" />
-                    </Grid>
-                    <!--  Only with automatic gain off. Range and end labels set in code.  -->
-                    <StackPanel x:Name="ManualGainPanel">
-                        <Slider
-                            x:Name="GainSlider"
-                            Header="Gain"
-                            StepFrequency="1"
-                            TickFrequency="6"
-                            TickPlacement="Outside"
-                            ValueChanged="GainSlider_ValueChanged" />
-                        <Grid>
-                            <TextBlock
-                                x:Name="GainMinText"
-                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                Style="{StaticResource CaptionTextBlockStyle}" />
-                            <TextBlock
-                                x:Name="GainMaxText"
-                                HorizontalAlignment="Right"
-                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                Style="{StaticResource CaptionTextBlockStyle}" />
-                        </Grid>
-                    </StackPanel>
-                </StackPanel>
-            </Border>
-
-            <!--  Output  -->
-            <Border Style="{StaticResource CardStyle}">
-                <StackPanel Spacing="12">
-                    <ComboBox
-                        x:Name="OutputCombo"
-                        HorizontalAlignment="Stretch"
-                        Header="Play the iPhone's audio into"
-                        PlaceholderText="No playback devices found"
-                        SelectionChanged="OutputCombo_SelectionChanged" />
-                    <ComboBox
-                        x:Name="BufferCombo"
-                        HorizontalAlignment="Stretch"
-                        Header="Buffering"
-                        SelectionChanged="BufferCombo_SelectionChanged">
-                        <x:String>Automatic</x:String>
-                        <x:String>Low latency (30 ms)</x:String>
-                        <x:String>Balanced (60 ms)</x:String>
-                        <x:String>Stable (120 ms)</x:String>
-                    </ComboBox>
-                </StackPanel>
-            </Border>
-
-            <!--  App  -->
-            <Border Style="{StaticResource CardStyle}">
-                <StackPanel>
-                    <CheckBox
-                        x:Name="CloseToTrayCheck"
-                        Click="CloseToTrayCheck_Click"
-                        Content="Keep app running in tray when closing" />
-                    <CheckBox
-                        x:Name="StartupCheck"
-                        Click="StartupCheck_Click"
-                        Content="Launch app in tray when Windows starts" />
-                </StackPanel>
-            </Border>
-
-            <!--  Footer: the support link. VB-CABLE's credit is under Show details (This PC).  -->
-            <Grid Margin="16,0,4,0" ColumnSpacing="12">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-                <TextBlock
-                    VerticalAlignment="Center"
-                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                    Style="{StaticResource CaptionTextBlockStyle}"
-                    x:Name="FooterText"
-                    TextWrapping="Wrap" />
-                <HyperlinkButton
-                    Grid.Column="1"
-                    NavigateUri="https://buymeacoffee.com/nordohm"
-                    ToolTipService.ToolTip="buymeacoffee.com/nordohm">
-                    <StackPanel Orientation="Horizontal" Spacing="6">
-                        <TextBlock Text="☕" />
-                        <TextBlock Text="Buy me a coffee" />
-                    </StackPanel>
-                </HyperlinkButton>
-            </Grid>
-
-        </StackPanel>
-    </ScrollViewer>
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
 </Window>

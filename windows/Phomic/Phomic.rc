@@ -2,8 +2,9 @@
 #include "resource.h"
 #include "Version.h"
 
-// The first icon is also what Explorer shows for Phomic.exe.
-IDI_PHOMIC ICON "Assets\\Phomic.ico"
+// The first icon is also what Explorer, Start and a pinned taskbar button show for Phomic.exe.
+IDI_PHOMIC ICON "Assets\\PhomicTile.ico"
+IDI_PHOMIC_GLYPH ICON "Assets\\Phomic.ico"
 
 // Apple's App Store badge, linking to Phomic for iPhone (Apple's artwork, from its marketing guidelines).
 IDR_BADGE_BLACK RCDATA "Assets\\AppStoreBadge-Black.svg"

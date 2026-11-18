@@ -25,7 +25,7 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0.17763
 LicenseFile=License.txt
-SetupIconFile=..\Phomic\Assets\Phomic.ico
+SetupIconFile=..\Phomic\Assets\PhomicTile.ico
 UninstallDisplayIcon={app}\Phomic.exe
 UninstallDisplayName=Phomic
 OutputDir=..\release
@@ -34,6 +34,8 @@ Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
 ; Updating while Phomic runs (it may be in the tray): close it first.
+; A folder left behind (say, by an uninstall that couldn't remove everything) needn't be asked about.
+DirExistsWarning=no
 CloseApplications=force
 RestartApplications=no
 
@@ -61,19 +63,38 @@ begin
   Result := ExpandConstant('{param:' + Name + '|0}') = '1';
 end;
 
+// VB-CABLE's own setup, which also removes it (VB-Audio's window, with a Remove Driver button).
+function VBCableSetup: String;
+begin
+  Result := ExpandConstant('{commonpf64}\VB\CABLE\VBCABLE_Setup_x64.exe');
+end;
+
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
   ResultCode: Integer;
   Command: String;
 begin
+  // Phomic is gone: VB-CABLE stays unless the user wants it gone too. Other apps may use it,
+  // and removing a driver needs VB-Audio's setup (and admin rights), so ask, and default to no.
+  if (CurUninstallStep = usPostUninstall) and not UninstallSilent and not Switch('KEEPMICROPHONE') and
+     FileExists(VBCableSetup) then
+  begin
+    // Short lines with breaks of their own: the box wraps long ones at odd places.
+    if MsgBox('Also remove VB-CABLE?' + #13#10#13#10 +
+      'It''s the audio driver behind Phomic''s microphone.' + #13#10 +
+      'Other apps may use it too.' + #13#10#13#10 +
+      'VB-Audio''s setup then opens: click Remove Driver.',
+      mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES then
+      ShellExec('runas', VBCableSetup, '', '', SW_SHOWNORMAL, ewNoWait, ResultCode); // it needs admin rights
+    Exit;
+  end;
+
   if CurUninstallStep <> usUninstall then
     Exit;
 
-  // Close this copy of Phomic (it may be running in the tray); leave other copies alone.
-  Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
-    '-NoProfile -Command "Get-Process Phomic -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq ''' +
-    ExpandConstant('{app}\Phomic.exe') + ''' } | Stop-Process -Force"',
-    '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  // Close this copy of Phomic (it may be running in the tray) so its files can be removed:
+  // it asks it to quit, and ends it if it doesn't. Copies elsewhere are left alone.
+  Exec(ExpandConstant('{app}\Phomic.exe'), '--quit', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
 
   // Original names for the VB-CABLE devices, both playback endpoints enabled again.
   if not Switch('KEEPMICROPHONE') then

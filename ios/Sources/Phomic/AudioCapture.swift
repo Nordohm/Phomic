@@ -17,7 +17,7 @@ enum CaptureError: LocalizedError {
 ///
 /// * `capturing`: records the microphone raw (RemoteIO, measurement mode, no app-side
 ///   processing) and emits 10 ms frames of 48 kHz mono Float32 through `onFrame`. Any
-///   processing comes from the iPhone's own Mic Mode (Standard / Voice Isolation / Wide Spectrum).
+///   processing comes from the iPhone's own Mic Mode (Standard / Voice Isolation; iOS offers Wide Spectrum only in call apps).
 /// * `keepingAlive`: releases the microphone (no orange indicator) but keeps a silent,
 ///   mixable output running so iOS doesn't suspend the app while it's muted in the background.
 /// * `stopped`.

@@ -119,6 +119,18 @@ namespace winrt::Phomic::implementation
     void MainWindow::InitializeComponent()
     {
         MainWindowT::InitializeComponent();
+        // The title bar is drawn in the window (AppTitleBar); Windows keeps the caption buttons.
+        ExtendsContentIntoTitleBar(true);
+        SetTitleBar(AppTitleBar());
+        Activated([weak = get_weak()](auto&&, WindowActivatedEventArgs const& args)
+        {
+            if (auto self = weak.get())
+            {
+                // Like Windows' own title bar: dimmed while another window is active.
+                const bool inactive = args.WindowActivationState() == WindowActivationState::Deactivated;
+                self->AppTitleText().Opacity(inactive ? 0.5 : 1.0);
+            }
+        });
         ResizeForDpi();
         // Follow Windows' light/dark mode in the title bar too.
         AppWindow().TitleBar().PreferredTheme(winrt::Microsoft::UI::Windowing::TitleBarTheme::UseDefaultAppMode);
@@ -216,7 +228,7 @@ namespace winrt::Phomic::implementation
             }
         });
 
-        FooterText().Text(L"Phomic " PHOMIC_VERSION_STRING L" is free and open source.");
+        FooterText().Text(L" " PHOMIC_VERSION_STRING L" is free and open source."); // after the "Phomic" link
         ShowAppStoreBadge();
         RootPanel().ActualThemeChanged([weak = get_weak()](auto&&, auto&&)
         {
@@ -359,11 +371,12 @@ namespace winrt::Phomic::implementation
         }
         const bool wasFull = m_neededClientHeight == 0 || client.Height + 2 >= m_neededClientHeight;
 
-        int32_t needed = static_cast<int32_t>(std::ceil(contentHeight * scale));
+        // The title bar is part of the client area (see AppTitleBar).
+        int32_t needed = static_cast<int32_t>(std::ceil((contentHeight + AppTitleBar().Height()) * scale));
         namespace windowing = winrt::Microsoft::UI::Windowing;
         const auto area = windowing::DisplayArea::GetFromWindowId(window.Id(), windowing::DisplayAreaFallback::Nearest).WorkArea();
         const int32_t frameWidth = window.Size().Width - client.Width;
-        const int32_t frameHeight = window.Size().Height - client.Height; // title bar and border
+        const int32_t frameHeight = window.Size().Height - client.Height; // the border
         needed = std::min(needed, area.Height - frameHeight);
 
         // Size limits (outer window size, physical pixels): a fixed width, a height up to the
@@ -398,6 +411,9 @@ namespace winrt::Phomic::implementation
 
     void MainWindow::SetUpTray()
     {
+        // The window's icons (taskbar, Alt+Tab) are the squircle; the tray and the title bar (drawn
+        // in the window, see AppTitleBar) show the glyph alone. The taskbar uses the small icon,
+        // the title bar's, so a Windows-drawn title bar can't differ from it.
         const HINSTANCE module = GetModuleHandleW(nullptr);
         m_appIcon = static_cast<HICON>(LoadImageW(module, MAKEINTRESOURCEW(IDI_PHOMIC), IMAGE_ICON, 0, 0, LR_DEFAULTSIZE));
         if (m_appIcon)
@@ -405,7 +421,7 @@ namespace winrt::Phomic::implementation
             AppWindow().SetIcon(winrt::Microsoft::UI::GetIconIdFromIcon(m_appIcon));
         }
         const int size = GetSystemMetricsForDpi(SM_CXSMICON, GetDpiForWindow(WindowHandle()));
-        m_trayIcon = static_cast<HICON>(LoadImageW(module, MAKEINTRESOURCEW(IDI_PHOMIC), IMAGE_ICON, size, size, LR_DEFAULTCOLOR));
+        m_trayIcon = static_cast<HICON>(LoadImageW(module, MAKEINTRESOURCEW(IDI_PHOMIC_GLYPH), IMAGE_ICON, size, size, LR_DEFAULTCOLOR));
         m_tray = std::make_unique<phomic::TrayIcon>(m_trayIcon, [weak = get_weak()](phomic::TrayIcon::Command command)
         {
             if (auto self = weak.get())
@@ -442,6 +458,7 @@ namespace winrt::Phomic::implementation
         }
         Activate();
         SetForegroundWindow(hwnd);
+        CheckFirewall();
     }
 
     void MainWindow::Quit()
@@ -1016,6 +1033,13 @@ namespace winrt::Phomic::implementation
         }
 
         UpdateConnection(wifi, bluetooth, usb);
+        // Windows Firewall, every 10 s while it can matter and someone can see the answer: it
+        // also notices a fix made in Windows' own settings.
+        if (m_tick % (10 * kTicksPerSecond) == 2 * kTicksPerSecond && m_wifiEnabled && wifi.listening &&
+            !wifi.connected && AppWindow().IsVisible())
+        {
+            CheckFirewall();
+        }
         if (m_tick % 5 == 0)
         {
             UpdateTransports(wifi, bluetooth, usb);
@@ -1183,6 +1207,8 @@ namespace winrt::Phomic::implementation
     {
         // Wi-Fi row
         std::wstring wifiText;
+        const bool firewallBlocks = m_wifiEnabled && wifi.listening && !wifi.connected &&
+                                    m_firewall == phomic::firewall::Verdict::Blocked;
         if (!m_wifiEnabled)
         {
             wifiText = L"Off";
@@ -1191,6 +1217,10 @@ namespace winrt::Phomic::implementation
         {
             wifiText = m_wifiRetrying && !m_wifiErrorShown ? std::wstring(L"Starting…")
                 : wifi.error.empty() ? std::wstring(L"Not available") : wifi.error;
+        }
+        else if (firewallBlocks)
+        {
+            wifiText = L"Windows Firewall blocks iPhones from connecting";
         }
         else if (wifi.connected)
         {
@@ -1355,11 +1385,33 @@ namespace winrt::Phomic::implementation
         // "Switch" on the transports that aren't in use, if they can take over.
         const bool switching = m_switchRequestedTick != 0 && m_tick - m_switchRequestedTick < 4 * kTicksPerSecond;
         const bool canSwitchToBluetooth = (wifi.connected || usb.connected) && bluetooth.supported && bluetooth.enabled;
-        const bool canSwitchToWiFi = (bluetooth.connected || usb.connected) && m_wifiEnabled && wifi.listening;
+        const bool canSwitchToWiFi = (bluetooth.connected || usb.connected) && m_wifiEnabled && wifi.listening && !firewallBlocks;
         const bool canSwitchToUsb = (wifi.connected || bluetooth.connected) && usb.enabled && usb.serviceRunning && usb.devices > 0;
         SwitchToBluetoothButton().Visibility(canSwitchToBluetooth ? Visibility::Visible : Visibility::Collapsed);
         SwitchToWiFiButton().Visibility(canSwitchToWiFi ? Visibility::Visible : Visibility::Collapsed);
         SwitchToUsbButton().Visibility(canSwitchToUsb ? Visibility::Visible : Visibility::Collapsed);
+        WiFiAllowButton().Visibility(firewallBlocks ? Visibility::Visible : Visibility::Collapsed);
+        WiFiAllowButton().IsEnabled(!m_firewallFixing);
+
+        // Mark the row in use (the same rows that say "In use").
+        const std::array<bool, 3> inUse{ wifi.connected, bluetooth.connected, usb.connected };
+        if (inUse != m_shownInUse)
+        {
+            m_shownInUse = inUse;
+            const auto show = [](bool on) { return on ? Visibility::Visible : Visibility::Collapsed; };
+            WiFiHighlight().Visibility(show(inUse[0]));
+            WiFiMark().Visibility(show(inUse[0]));
+            WiFiActiveIcon().Visibility(show(inUse[0]));
+            WiFiIcon().Visibility(show(!inUse[0]));
+            BluetoothHighlight().Visibility(show(inUse[1]));
+            BluetoothMark().Visibility(show(inUse[1]));
+            BluetoothActiveIcon().Visibility(show(inUse[1]));
+            BluetoothIcon().Visibility(show(!inUse[1]));
+            UsbHighlight().Visibility(show(inUse[2]));
+            UsbMark().Visibility(show(inUse[2]));
+            UsbActiveIcon().Visibility(show(inUse[2]));
+            UsbIcon().Visibility(show(!inUse[2]));
+        }
         SwitchToBluetoothButton().IsEnabled(!switching);
         SwitchToWiFiButton().IsEnabled(!switching);
         SwitchToUsbButton().IsEnabled(!switching);
@@ -1741,5 +1793,77 @@ namespace winrt::Phomic::implementation
         default:
             break;
         }
+    }
+
+    // Reads Windows Firewall's rules for this program off the UI thread. PHOMIC_FIREWALL_EXE
+    // checks another path instead (for testing against an installed copy's rules).
+    winrt::fire_and_forget MainWindow::CheckFirewall()
+    {
+        if (m_firewallChecking)
+        {
+            co_return;
+        }
+        m_firewallChecking = true;
+        std::wstring exe = phomic::virtualmic::OwnExePath();
+        wchar_t custom[MAX_PATH]{};
+        const DWORD length = GetEnvironmentVariableW(L"PHOMIC_FIREWALL_EXE", custom, ARRAYSIZE(custom));
+        if (length > 0 && length < ARRAYSIZE(custom))
+        {
+            exe = custom;
+        }
+        auto weak = get_weak();
+        winrt::apartment_context ui;
+        co_await winrt::resume_background();
+        const auto verdict = phomic::firewall::Check(exe);
+        co_await ui;
+        if (auto self = weak.get())
+        {
+            self->m_firewallChecking = false;
+            if (verdict != phomic::firewall::Verdict::Unknown && verdict != self->m_firewall)
+            {
+                self->m_firewall = verdict;
+                self->RefreshTransports();
+            }
+        }
+    }
+
+    void MainWindow::WiFiAllowButton_Click(winrt::Windows::Foundation::IInspectable const&, RoutedEventArgs const&)
+    {
+        if (m_firewallFixing)
+        {
+            return;
+        }
+        m_firewallFixing = true;
+        RefreshTransports();
+        // Changing firewall rules needs admin rights: Phomic again, elevated (App's --allow-firewall).
+        // The UAC prompt blocks, so wait for it off the UI thread.
+        auto dispatcher = DispatcherQueue();
+        std::thread([dispatcher, weak = get_weak()]
+        {
+            const HRESULT coInit = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+            DWORD exitCode = 0;
+            HRESULT hr = phomic::virtualmic::RunElevatedAndWait(phomic::virtualmic::OwnExePath(), L"--allow-firewall", &exitCode);
+            if (SUCCEEDED(hr))
+            {
+                hr = static_cast<HRESULT>(exitCode);
+            }
+            if (SUCCEEDED(coInit))
+            {
+                CoUninitialize();
+            }
+            dispatcher.TryEnqueue([weak, hr]
+            {
+                if (auto self = weak.get())
+                {
+                    self->m_firewallFixing = false;
+                    if (FAILED(hr) && hr != HRESULT_FROM_WIN32(ERROR_CANCELLED))
+                    {
+                        self->ShowError(L"Couldn't change Windows Firewall", std::wstring(hresult_error(hr).message()));
+                    }
+                    self->RefreshTransports();
+                    self->CheckFirewall();
+                }
+            });
+        }).detach();
     }
 }

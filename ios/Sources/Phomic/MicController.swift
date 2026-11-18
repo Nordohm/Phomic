@@ -93,7 +93,7 @@ final class MicController {
     private(set) var bluetoothSampleRate: Int?
     /// Meter position 0...1 (-60 dBFS ... 0 dBFS).
     private(set) var level: Float = 0
-    /// The iPhone's Mic Mode (Standard / Voice Isolation / Wide Spectrum) while recording.
+    /// The iPhone's Mic Mode (Standard or Voice Isolation) while recording.
     private(set) var systemMicMode: String?
     var pairingPrompt: PairingPrompt?
     private(set) var savedPairings: [SavedPairing] = []

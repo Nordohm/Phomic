@@ -2,6 +2,7 @@
 #include "App.xaml.h"
 #include "MainWindow.xaml.h"
 #include "VirtualMic.h"
+#include "Firewall.h"
 #include "Settings.h"
 #include "Startup.h"
 #include "TrayIcon.h"
@@ -35,8 +36,9 @@ namespace winrt::Phomic::implementation
 
     void App::OnLaunched([[maybe_unused]] LaunchActivatedEventArgs const& e)
     {
-        // Helper mode: the window relaunches Phomic elevated with one of these when Windows
-        // wants admin rights to rename/disable the VB-CABLE endpoints. The exit code is the HRESULT.
+        // Helper mode: the window relaunches Phomic elevated with one of these for what needs
+        // admin rights (renaming/disabling the VB-CABLE endpoints, Windows Firewall rules), and
+        // the uninstaller runs --restore-microphone. The exit code is the HRESULT.
         const std::wstring_view commandLine = GetCommandLineW();
         if (commandLine.find(L"--setup-microphone") != std::wstring_view::npos)
         {
@@ -45,6 +47,15 @@ namespace winrt::Phomic::implementation
         if (commandLine.find(L"--restore-microphone") != std::wstring_view::npos)
         {
             ExitProcess(static_cast<UINT>(phomic::virtualmic::Restore()));
+        }
+        if (commandLine.find(L"--allow-firewall") != std::wstring_view::npos)
+        {
+            ExitProcess(static_cast<UINT>(phomic::firewall::Allow(phomic::virtualmic::OwnExePath())));
+        }
+        // The uninstaller: close the running copy from this folder, so its files can go.
+        if (commandLine.find(L"--quit") != std::wstring_view::npos)
+        {
+            ExitProcess(phomic::TrayIcon::QuitExisting(phomic::virtualmic::OwnExePath()) ? 0 : 1);
         }
 
         // Only one copy can own the network port; bring the existing window forward instead.

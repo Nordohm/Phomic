@@ -37,6 +37,9 @@
     <ClCompile Include="AppleUsb.cpp">
       <Filter>Engine</Filter>
     </ClCompile>
+    <ClCompile Include="Firewall.cpp">
+      <Filter>Engine</Filter>
+    </ClCompile>
     <ClCompile Include="PhoneProtocol.cpp">
       <Filter>Engine</Filter>
     </ClCompile>
@@ -96,6 +99,9 @@
     <ClInclude Include="AppleUsb.h">
       <Filter>Engine</Filter>
     </ClInclude>
+    <ClInclude Include="Firewall.h">
+      <Filter>Engine</Filter>
+    </ClInclude>
     <ClInclude Include="Net.h">
       <Filter>Engine</Filter>
     </ClInclude>
@@ -132,5 +138,7 @@
     <ClInclude Include="Version.h" />
     <ResourceCompile Include="Phomic.rc" />
     <Image Include="Assets\Phomic.ico" />
+    <Image Include="Assets\PhomicTile.ico" />
+    <Image Include="Assets\Phomic.svg" />
   </ItemGroup>
 </Project>

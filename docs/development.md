@@ -92,9 +92,17 @@ need to create a project in Visual Studio; it's already in `windows/`.
   [Inno Setup 7](https://jrsoftware.org/isdl.php). The version lives in `windows/Phomic/Version.h` (exe version info,
   *Show details*, the line at the bottom of the window and the installer all take it from there). The installer
   script is `windows/installer/Phomic.iss`:
-  per-user install, Start-menu shortcut; its uninstaller takes `/KEEPSETTINGS=1` and `/KEEPMICROPHONE=1`.
+  per-user install, Start-menu shortcut. The uninstaller closes a running Phomic from that folder (`Phomic.exe
+  --quit`: like *Quit* in the tray menu, ended after 5 s if need be), gives VB-CABLE its names back, deletes the
+  settings, and finally asks whether to remove VB-CABLE too (default no; it opens VB-Audio's setup, which needs
+  admin rights). It takes `/KEEPSETTINGS=1` and `/KEEPMICROPHONE=1` (which also skips that question).
 - On first launch, Windows Firewall asks whether Phomic may accept connections. Allow it on **private
-  networks**. Phomic listens on **TCP and UDP port 50505**.
+  networks**. Phomic listens on **TCP and UDP port 50505**. A no makes block rules for that path and Windows
+  doesn't ask again: the Wi-Fi row then says the firewall blocks iPhones, and **Allow** fixes it after a UAC
+  prompt (Phomic again, elevated, with `--allow-firewall`: its block rules become allow rules, plus a rule named
+  "Phomic" for the current kind of network if none covers it). The window rereads the rules every 10 s while it's
+  open, so a fix in Windows' own settings shows too. `PHOMIC_FIREWALL_EXE=<path>` makes it check another copy's
+  rules (for testing).
 - Bluetooth needs no pairing. With the **Bluetooth** switch on, the PC publishes Phomic's Bluetooth service and
   waits: the iPhone connects to it, the way a phone connects to headphones. The PC never scans or retries.
 - **USB** goes through Apple's USB service (*usbmux*, from the [Apple Devices](https://apps.microsoft.com/detail/9NP83LWLPZ9K)
@@ -143,8 +151,10 @@ need to create a project in Visual Studio; it's already in `windows/`.
   `PHOMIC_UPDATE_URL` points the check at another URL.)
 - *Show details* under *Connection* lists the stream (link, audio format, packets and loss, buffer,
   interruptions) while an iPhone is connected, and this PC's name, addresses, port and Bluetooth state.
-- Icon: an iPhone as the capsule of a microphone, drawn on a 24-pixel grid so it stays readable at taskbar size. On
-  Windows it's the glyph alone (no tile). Source: `windows/Phomic/Assets/Phomic.svg`; `Phomic.ico` is rendered from it.
+- Icon: an iPhone as the capsule of a microphone, drawn on a 24-pixel grid so it stays readable at taskbar size.
+  Windows shows it in two forms: white on a blue squircle like the iPhone app (`PhomicTile.ico`: Explorer, Start,
+  taskbar, Alt+Tab, the installer) and the glyph alone (`Phomic.ico`: title bar and tray). Source:
+  `windows/Phomic/Assets/Phomic.svg`; `python windows/make-tile-icon.py` makes `PhomicTile.svg` and `.ico` from it.
   The iOS app uses `Resources/AppIcon.png` (from `AppIcon.svg`, white on blue, via `iconPath` in `xtool.yml`).
 
 - **Tests** (`windows/tests/`, Python 3, nothing to install) play the iPhone against the running PC app on the
@@ -167,6 +177,7 @@ Code map:
 | `BluetoothReceiver.*` | Bluetooth LE: GATT server and its advertisement (iPhones connect to it), Opus decode and loss concealment |
 | `UsbReceiver.*` | USB: watches Apple's usbmux service for plugged-in iPhones and connects to Phomic on them through the cable |
 | `AppleUsb.*` | Finds out why USB can't work: Apple Devices installed and on at startup, who holds port 27015, iPhones Windows sees |
+| `Firewall.*` | Whether Windows Firewall lets iPhones reach Phomic on the current network, and the fix (run elevated) |
 | `Adpcm.h`, `Resampler.*` | Fallback IMA-ADPCM decoder; polyphase windowed-sinc upsampler (24/16 kHz → 48 kHz) |
 | `SourceArbiter.h` | Decides whether Wi-Fi, Bluetooth or USB feeds the audio pipeline |
 | `JitterBuffer.*` | Reorders packets, hides loss, absorbs jitter (fixed or Auto), and corrects phone/PC clock drift by resampling ±0.5% |
@@ -223,8 +234,9 @@ iOS asks for **Microphone**, **Local Network** (Wi-Fi) and **Bluetooth** (only w
   orange dot disappears). Phomic keeps silent, mixable playback
   running so iOS doesn't suspend it, and your music isn't interrupted.
 - **Processing:** Phomic records the microphone raw (RemoteIO, measurement mode, no automatic gain) and adds no
-  processing of its own. The iPhone's **Mic Mode** decides: *Standard*, *Voice Isolation* (removes background
-  noise) or *Wide Spectrum* (keeps everything). Change it in Control Center, or with the *Mic Mode* button under the
+  processing of its own. The iPhone's **Mic Mode** decides: *Standard* (unprocessed) or *Voice Isolation* (removes
+  background noise). iOS offers *Wide Spectrum* only in call apps such as FaceTime, where *Standard* is processed for
+  calls; in a recording app like Phomic, *Standard* already keeps everything. Change it in Control Center, or with the *Mic Mode* button under the
   mute button while live, which opens the system picker. Apps can only read the setting, not change it. For a gate, compressor or noise
   suppression beyond that, use what Discord, Teams or OBS already have on the PC.
 - **Live Activity:** while connected, the lock screen and Dynamic Island show *Live* (green), *Muted* (red) or

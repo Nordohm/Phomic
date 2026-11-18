@@ -298,7 +298,7 @@ private struct LiveView: View {
             }
 
             VStack(spacing: 18) {
-                // The iPhone's Mic Mode (Standard / Voice Isolation / Wide Spectrum): opens the system picker.
+                // The iPhone's Mic Mode (Standard or Voice Isolation): opens the system picker.
                 Button {
                     model.showSystemMicModes()
                 } label: {

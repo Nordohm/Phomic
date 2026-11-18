@@ -11,6 +11,7 @@
 #include "AutoGain.h"
 #include "Limiter.h"
 #include "TrayIcon.h"
+#include "Firewall.h"
 
 namespace winrt::Phomic::implementation
 {
@@ -64,6 +65,8 @@ namespace winrt::Phomic::implementation
         void UpdateButton_Click(winrt::Windows::Foundation::IInspectable const& sender,
             winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
         void AutoGainToggle_Toggled(winrt::Windows::Foundation::IInspectable const& sender,
+            winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
+        void WiFiAllowButton_Click(winrt::Windows::Foundation::IInspectable const& sender,
             winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
 
     private:
@@ -127,6 +130,7 @@ namespace winrt::Phomic::implementation
         std::wstring m_shownBluetooth;
         std::wstring m_shownWiFi;
         std::wstring m_shownUsb;
+        std::array<bool, 3> m_shownInUse{};  // Wi-Fi, Bluetooth, USB rows marked as in use
         // What the USB row's button does (it fixes the problem the row describes).
         enum class UsbAction { None, GetAppleDevices, StartService, OpenAppleDevices, CopyCommand };
         UsbAction m_usbAction = UsbAction::None;
@@ -143,6 +147,11 @@ namespace winrt::Phomic::implementation
         bool m_wifiErrorShown = false;
         uint64_t m_wifiRetrySince = 0;
         uint64_t m_wifiLastTry = 0;
+        // Windows Firewall: does it let iPhones reach Phomic over Wi-Fi (see CheckFirewall)?
+        winrt::fire_and_forget CheckFirewall();
+        phomic::firewall::Verdict m_firewall = phomic::firewall::Verdict::Unknown;
+        bool m_firewallChecking = false;
+        bool m_firewallFixing = false;  // the Allow button's UAC prompt is open
 
         // Virtual microphone (VB-CABLE) setup.
         std::wstring m_feedId;          // endpoint Phomic plays into, once found
