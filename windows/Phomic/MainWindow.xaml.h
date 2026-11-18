@@ -95,6 +95,7 @@ namespace winrt::Phomic::implementation
         bool SizesAreReal();
         void KeepShape();
         bool m_fitPending = false; // content changed while the window was hidden or minimized
+        bool m_firstFocusDone = false;
         void RefreshDevices();
         void StartOutput(std::wstring const& target);
         bool OutputRunning() const;

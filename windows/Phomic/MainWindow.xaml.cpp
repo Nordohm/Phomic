@@ -133,6 +133,28 @@ namespace winrt::Phomic::implementation
                 {
                     self->KeepShape(); // also the first time it's shown
                 }
+                // Windows gives the first focus to the first button (the App Store badge), with its
+                // focus frame when the app was started from the keyboard. Park it on the window
+                // itself instead, after Windows has placed it; Tab then starts at the first button.
+                if (!inactive && !self->m_firstFocusDone)
+                {
+                    self->m_firstFocusDone = true;
+                    self->DispatcherQueue().TryEnqueue(winrt::Microsoft::UI::Dispatching::DispatcherQueuePriority::Low, [weak]
+                    {
+                        if (auto self = weak.get())
+                        {
+                            self->RootGrid().Focus(FocusState::Programmatic);
+                        }
+                    });
+                }
+            }
+        });
+        // Once the first focus has moved on, the window itself is no Tab stop.
+        RootGrid().LostFocus([weak = get_weak()](auto&&, RoutedEventArgs const& args)
+        {
+            if (auto self = weak.get(); self && args.OriginalSource() == self->RootGrid())
+            {
+                self->RootGrid().IsTabStop(false);
             }
         });
         ResizeForDpi();

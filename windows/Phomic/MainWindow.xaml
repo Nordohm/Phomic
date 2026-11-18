@@ -13,7 +13,8 @@
         <MicaBackdrop />
     </Window.SystemBackdrop>
 
-    <Grid>
+    <!--  Focusable only to hold the first focus (see InitializeComponent), so no button starts out selected  -->
+    <Grid x:Name="RootGrid" IsTabStop="True">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
