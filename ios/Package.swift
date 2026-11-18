@@ -2,15 +2,6 @@
 
 import PackageDescription
 
-// The iOS SDK version xtool builds record in the app. xtool's linker (ld64.lld) gets the
-// deployment target there (18.0) instead of the SDK's own version, and iOS then runs the app
-// the way it ran apps built for iOS 18: no Liquid Glass tab bar, square glass buttons, system
-// menus drawn the old way. This passes the linker its version again (the last one wins):
-// minimum iOS 18.0 (as in `platforms` below), SDK 27.2, the one xtool's Darwin SDK holds and
-// App Store builds use (Xcode 27.2), so both behave the same. Update it with the SDK.
-// App Store builds come from Xcode (Xcode/project.yml) and record their real SDK.
-let iOSSDKVersion = ["-Xlinker", "-platform_version", "-Xlinker", "ios", "-Xlinker", "18.0", "-Xlinker", "27.2"]
-
 let package = Package(
     name: "Phomic",
     platforms: [
@@ -63,13 +54,30 @@ let package = Package(
                 // which finds the widget's @main through the __swift5_entry section. Nothing
                 // references that, so the linker would drop it and every line of widget code
                 // (and the signer then fails: "Can't find free space of LoadCommands"). Keep it.
-                .unsafeFlags(["-Xlinker", "-u", "-Xlinker", "_main"] + iOSSDKVersion),
+                .unsafeFlags(["-Xlinker", "-u", "-Xlinker", "_main"]),
             ]
         ),
         .target(
             name: "Phomic",
-            dependencies: ["COpus", "PhomicActivity"],
-            linkerSettings: [.unsafeFlags(iOSSDKVersion)]
+            dependencies: ["COpus", "PhomicActivity"]
         ),
     ]
 )
+
+// The iOS SDK version xtool builds record in the app. Keep this below every target.
+// xtool links on Linux with clang, which gets the SDK as --sysroot but reads the SDK version
+// (SDKSettings.json) only from -isysroot. Without this the app and the widget record the
+// deployment target as their SDK version (minos 18.0, sdk 18.0), and iOS runs them the way it
+// ran apps built for iOS 18: no Liquid Glass tab bar, square glass buttons, system menus drawn
+// the old way. With it, clang reads the real version from xtool's iPhoneOS SDK at every link,
+// so nothing needs changing when the SDK does. Only on Linux: App Store builds come from Xcode
+// (Xcode/project.yml), which passes -isysroot itself. The SDK is where `xtool setup` puts it.
+#if os(Linux)
+let iPhoneOSSDK = (Context.environment["HOME"] ?? "/root")
+    + "/.swiftpm/swift-sdks/darwin.artifactbundle/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk"
+for target in package.targets where [.regular, .executable, .test].contains(target.type) {
+    target.linkerSettings = (target.linkerSettings ?? []) + [
+        .unsafeFlags(["-Xclang-linker", "-isysroot", "-Xclang-linker", iPhoneOSSDK], .when(platforms: [.iOS])),
+    ]
+}
+#endif

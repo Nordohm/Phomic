@@ -206,9 +206,9 @@ xtool dev build      # just compile (unsigned)
   (`xtool dev generate-xcode-project`) if you'd rather work in Xcode. xtool runs on Linux and Windows too, but
   there it needs the iOS SDK extracted from Xcode, and Apple's Xcode license only allows that SDK on Apple
   computers.
-- **SDK version:** xtool's linker records the deployment target (18.0) as the SDK version, and iOS then shows the
-  app as if it were built for iOS 18 (no Liquid Glass). `Package.swift` passes the linker the real SDK version
-  (27.2) instead; update it there when the SDK changes.
+- **SDK version:** on Linux, xtool's link records the deployment target (18.0) as the SDK version, and iOS then
+  shows the app as if it were built for iOS 18 (no Liquid Glass). The block at the end of `Package.swift` hands
+  clang xtool's iPhoneOS SDK as `-isysroot`, so it reads the real version from the SDK at every link.
 - **App ID:** `io.github.nordohm.Phomic` (`xtool.yml`). An App ID belongs to one developer team, so change it to
   your own before you build. With a free Apple account, xtool's signature lasts 7 days, so run `xtool dev` again
   after that; a paid developer account makes it last a year.

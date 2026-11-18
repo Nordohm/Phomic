@@ -7,23 +7,34 @@ description: Pitfalls of building iOS apps with xtool (SwiftPM, on Linux or Wind
 
 ## The SDK version in the binary
 
-xtool's linker (ld64.lld) writes the **deployment target** into `LC_BUILD_VERSION` as the SDK version. iOS
-then runs the app as if it were built with that old SDK: on an iOS 18 target, no Liquid Glass tab bar, square
-glass buttons, old-style menus.
+On Linux, xtool links through clang, which gets the SDK as `--sysroot` but reads the SDK version
+(`SDKSettings.json`) only from `-isysroot`. So the **deployment target** ends up in `LC_BUILD_VERSION` as the SDK
+version, and iOS runs the app as if it were built with that old SDK: on an iOS 18 target, no Liquid Glass tab
+bar, square glass buttons, old-style menus.
 
-Fix it in `Package.swift`, for the app and every extension (the last `-platform_version` wins):
+Fix it at the end of `Package.swift`, below every target, so it reaches the app and each extension:
 
 ```swift
-let iOSSDKVersion = ["-Xlinker", "-platform_version", "-Xlinker", "ios", "-Xlinker", "18.0", "-Xlinker", "27.2"]
-// linkerSettings: [.unsafeFlags(iOSSDKVersion)]
+#if os(Linux)
+let iPhoneOSSDK = (Context.environment["HOME"] ?? "/root")
+    + "/.swiftpm/swift-sdks/darwin.artifactbundle/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk"
+for target in package.targets where [.regular, .executable, .test].contains(target.type) {
+    target.linkerSettings = (target.linkerSettings ?? []) + [
+        .unsafeFlags(["-Xclang-linker", "-isysroot", "-Xclang-linker", iPhoneOSSDK], .when(platforms: [.iOS])),
+    ]
+}
+#endif
 ```
 
-- The first number is the minimum iOS (as in `platforms`), the second the SDK actually used. Find it in
-  `~/.swiftpm/swift-sdks/darwin.artifactbundle/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk/SDKSettings.json`
-  (`Version`). Update it whenever the Darwin SDK is rebuilt from a newer Xcode.
-- Keep it equal to what App Store builds use, so a development build behaves like the shipped one.
+- clang then reads the real version from the SDK at every link: nothing to update when the SDK changes, and the
+  minimum still comes from `platforms`. Xcode builds (and builds on a Mac) are unaffected; Xcode passes
+  `-isysroot` itself.
+- Don't also pass a fixed `-Xlinker -platform_version ios <min> <sdk>`: the linker uses the last one it gets,
+  which would override the real version.
+- If the SDK path is wrong, clang warns `no such sysroot directory` and the old behaviour comes back silently.
 - Check a build: read `LC_BUILD_VERSION` (load command `0x32`: platform, minos, sdk; versions packed as
-  `X << 16 | Y << 8 | Z`) from the app's and each extension's executable.
+  `X << 16 | Y << 8 | Z`) from the app's and each extension's executable. `sdk` should be the SDK's version, not
+  `minos`.
 
 ## App Intents metadata
 
