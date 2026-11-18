@@ -421,8 +421,14 @@ namespace winrt::Phomic::implementation
         }
         const bool wasFull = m_neededClientHeight == 0 || client.Height + 2 >= m_neededClientHeight;
 
-        // The title bar is part of the client area (see AppTitleBar).
-        int32_t needed = static_cast<int32_t>(std::ceil((contentHeight + AppTitleBar().Height()) * scale));
+        // The title bar is part of the client area (see AppTitleBar), and Windows keeps the top
+        // of it (a 1 px border) from the content: count both, or the content scrolls by that.
+        double inset = 0;
+        if (const auto root = Content().try_as<FrameworkElement>(); root && root.ActualHeight() > 0)
+        {
+            inset = std::clamp(client.Height / scale - root.ActualHeight(), 0.0, 8.0);
+        }
+        int32_t needed = static_cast<int32_t>(std::ceil((contentHeight + AppTitleBar().Height() + inset) * scale));
         namespace windowing = winrt::Microsoft::UI::Windowing;
         const auto area = windowing::DisplayArea::GetFromWindowId(window.Id(), windowing::DisplayAreaFallback::Nearest).WorkArea();
         const int32_t frameWidth = window.Size().Width - client.Width;
