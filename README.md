@@ -42,7 +42,7 @@ another tab on the iPhone, or click **Switch** in the PC app.
 
 ## Support
 
-If Phomic is useful to you, [buy me a coffee](https://buymeacoffee.com/nordohm) ☕.
+If you'd like to support Phomic, you can [buy me a coffee](https://buymeacoffee.com/nordohm) ☕
 
 ## Development
 
