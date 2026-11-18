@@ -130,12 +130,15 @@ No account or sign-in is needed, and the app collects no data.
 
 ## Assets
 
-Made by `appstore/make_assets.py` from real screenshots (status bar set to 9:41, PC renamed "Desktop PC").
-The Lock Screen slide keeps the real Live Activity but draws its own wallpaper and clock: the
-screenshot's wallpaper is someone else's art.
+Made by `appstore/make_assets.py` from real dark-mode screenshots (1.2, Nov 2026): status bar set to 9:41, and
+the PC's name "DESKTOP", cut out of the real name so it stays in the iPhone's font. The Lock Screen slide keeps
+the real Live Activity but draws its own wallpaper and clock: the screenshot's wallpaper is someone else's art.
 
-- `out/screenshots/6.1/` 1179 × 2556: iPhone with Dynamic Island (medium), required
-- `out/screenshots/6.9/` 1320 × 2868: iPhone with Dynamic Island (large)
-  1. Your iPhone is your PC's mic · 2. Mute from the Lock Screen · 3. Wi-Fi or Bluetooth ·
-  4. Private by design
-- `out/header-universal.png` 5244 × 2950: product page header and search results
+- `out/screenshots/6.1/` 1179 × 2556: iPhone with Dynamic Island (medium), required; App Store Connect scales
+  it to the other iPhones
+- `out/screenshots/6.9/` 1320 × 2868: iPhone with Dynamic Island (large), if ever wanted
+  1. Your iPhone is your PC's mic · 2. Mute from the Lock Screen · 3. Wi-Fi, Bluetooth or USB · 4. Mute with
+  one tap · 5. Private by design
+- `out/header-universal.png` 5244 × 2950: product page header. It shows small on an iPhone, so it's only the
+  headline and the three connections (with the app's own tab bar icons), inside the safe area 1402 × 962 at
+  (1921, 660).

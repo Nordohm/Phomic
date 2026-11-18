@@ -2,13 +2,15 @@
 
     python appstore/make_assets.py <folder with the screenshots>
 
-Expects the screenshots (1179 x 2556, iPhone with Dynamic Island) named in SOURCES below.
+Expects the screenshots (1179 x 2556, iPhone with Dynamic Island, dark mode) named in SOURCES below.
 Writes to appstore/out/:
   screenshots/6.1/*.png   1179 x 2556  (iPhone with Dynamic Island, medium; required)
   screenshots/6.9/*.png   1320 x 2868  (iPhone with Dynamic Island, large)
   header-universal.png    5244 x 2950  (product page header + search results)
-Before composing, the screenshots get a clean status bar (9:41) and a generic PC name.
+Before composing, the screenshots get a clean status bar (9:41), and the PC's name becomes "DESKTOP":
+cut out of the real name ("ATT_DESKTOP_OLD"), so it stays in the iPhone's own font.
 """
+import math
 import os
 import sys
 
@@ -19,13 +21,32 @@ OUT = os.path.join(HERE, "out")
 FONTS = r"C:\Windows\Fonts"
 BLUE_TOP = (58, 151, 242)     # app icon gradient, #3A97F2
 BLUE_BOTTOM = (20, 103, 214)  # #1467D6
-PC_NAME = "Desktop PC"
 
 SOURCES = {
-    "wifi": "IMG_3977.PNG",
-    "bluetooth": "IMG_3978.PNG",
-    "settings": "IMG_3979.PNG",
-    "lock": "IMG_3980.PNG",  # Lock Screen with the Live Activity (only its pieces are used)
+    "wifi": "IMG_3991.PNG",   # live over Wi-Fi
+    "usb": "IMG_3992.PNG",    # live over USB
+    "muted": "IMG_3993.PNG",  # muted (Wi-Fi)
+    "pick": "IMG_3994.PNG",   # the Wi-Fi tab's list of PCs
+    "lock": "IMG_3995.PNG",   # Lock Screen with the Live Activity (only its pieces are used)
+}
+
+# Where things are in those screenshots (pixels, measured). The name "ATT_DESKTOP_OLD" sits between
+# two underscores; "DESKTOP" is what's between them.
+BUTTON_CENTER = (589.5, 1276.8)   # the mute button: the glow is a circle around it
+CHIP = {                          # the "<PC> · 8 ms" capsule under the title, y 851-924
+    # icon, "DESKTOP", " · 8 ms" (from the space after "OLD" to the end), as x ranges
+    "wifi": ((323, 367), (482, 647), (741, 858)),
+    "usb": ((324, 368), (483, 648), (742, 858)),
+    "muted": ((314, 358), (473, 638), (732, 869)),
+}
+CHIP_Y = (851, 924)
+CHIP_PAD = (34, 32)                   # the capsule's edge to the icon, and the text to its edge
+CHIP_ICON_GAP = 28                    # icon to text
+CHIP_FILL = ((118, 118, 128), 0.245)  # iOS's tertiary fill over the glow (measured)
+TABS = {                              # tab bar icons, white (not the selected tab)
+    "wifi": ("usb", (290, 2346, 374, 2410)),
+    "bluetooth": ("wifi", (566, 2344, 612, 2414)),
+    "usb": ("wifi", (833, 2337, 864, 2422)),
 }
 
 
@@ -51,23 +72,97 @@ def draw_on_baseline(draw, text, fnt, baseline_y, fill, center_x=None, left_x=No
     draw.text((x, baseline_y - ascent), text, font=fnt, fill=fill)
 
 
+def paste_glyph(dst, src, box, color=None, floor=60, at=None, ceiling=255):
+    """Copies light glyphs from src (box) onto dst without their background: alpha from brightness
+    between floor (background) and ceiling (the glyph's own color). at: where to put them."""
+    crop = src.crop(box)
+    span = max(1, ceiling - floor)
+    alpha = crop.convert("L").point(lambda v: max(0, min(255, (v - floor) * 255 // span)))
+    fill = Image.new("RGB", crop.size, color) if color else crop
+    dst.paste(fill, at or box[:2], alpha)
+
+
+def brightness(rgb):
+    return round(0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2])
+
+
+# --------------------------------------------------------------------------- the app's screens
+
+def radial_background(im):
+    """The glow's color by distance from the mute button, read along an empty line to its left."""
+    cx, cy = BUTTON_CENTER
+    return [im.getpixel((max(0, int(cx - r)), int(cy))) for r in range(int(cx) + 1)]
+
+
+def rename_chip(im, kind):
+    """Redraws the "<PC> · 8 ms" capsule as "DESKTOP · 8 ms": the glow behind it from the circle
+    it follows, a capsule as wide as the new text, and the pieces of the real text on it."""
+    src = im.copy()
+    icon, name, tail = CHIP[kind]
+    x0, x1 = icon[0] - CHIP_PAD[0], tail[1] + CHIP_PAD[1]  # the real capsule
+    y0, y1 = CHIP_Y
+    profile = radial_background(src)
+    cx, cy = BUTTON_CENTER
+    px = im.load()
+    for y in range(y0 - 2, y1 + 2):
+        for x in range(x0 - 2, x1 + 2):
+            r = min(len(profile) - 1, int(math.hypot(x - cx, y - cy)))
+            px[x, y] = profile[r]
+
+    width = CHIP_PAD[0] + (icon[1] - icon[0]) + CHIP_ICON_GAP + (name[1] - name[0]) + (tail[1] - tail[0]) + CHIP_PAD[1]
+    left = round(cx - width / 2)
+    k = 4  # the capsule's edge, antialiased
+    mask = Image.new("L", (width * k, (y1 - y0) * k), 0)
+    ImageDraw.Draw(mask).rounded_rectangle((0, 0, width * k - 1, (y1 - y0) * k - 1), (y1 - y0) * k // 2, fill=255)
+    mask = mask.resize((width, y1 - y0), Image.LANCZOS)
+    tint, a = CHIP_FILL
+    for y in range(y0, y1):
+        for x in range(left, left + width):
+            m = mask.getpixel((x - left, y - y0)) / 255 * a
+            b = px[x, y]
+            px[x, y] = tuple(round(b[i] * (1 - m) + tint[i] * m) for i in range(3))
+
+    def capsule_fill(x, y):
+        """The real capsule's color at (x, y), text aside: the fill over the glow."""
+        b = profile[min(len(profile) - 1, int(math.hypot(x - cx, y - cy)))]
+        return brightness(tuple(b[i] * (1 - a) + tint[i] * a for i in range(3)))
+
+    # The text and icon, lifted off the real capsule pixel by pixel (its fill varies a little with
+    # the glow behind it) and put on the new one.
+    text = max((src.getpixel((x, y)) for x in range(name[0], name[1]) for y in range(y0, y1)), key=brightness)
+    ink = brightness(text)
+    spx = src.load()
+    x = left + CHIP_PAD[0]
+    for piece in (icon, None, name, tail):
+        if piece is None:
+            x += CHIP_ICON_GAP
+            continue
+        for sy in range(y0, y1):
+            for sx in range(piece[0], piece[1]):
+                floor = capsule_fill(sx, sy)
+                k = max(0.0, min(1.0, (brightness(spx[sx, sy]) - floor - 1) / max(1, ink - floor)))
+                if k > 0:
+                    dx = x + sx - piece[0]
+                    b = px[dx, sy]
+                    px[dx, sy] = tuple(round(b[i] * (1 - k) + text[i] * k) for i in range(3))
+        x += piece[1] - piece[0]
+    return im
+
+
 def clean(im, kind):
-    """Status bar 9:41 without the silent-mode bell; the PC's real name replaced."""
+    """Status bar 9:41 without the Focus icon; the PC's name "DESKTOP"."""
     im = im.convert("RGB").copy()
     d = ImageDraw.Draw(im)
-    top_bg = im.getpixel((40, 90))
-    # Time "07.15" (x 128-246, digits 69-106) and the bell (x 261-299).
-    d.rectangle((110, 55, 315, 120), fill=top_bg)
+    # The time "05.44" and the Focus icon next to it: x 111-315, capitals 69-107.
+    d.rectangle((100, 55, 330, 120), fill=im.getpixel((40, 90)))
     draw_on_baseline(d, "9:41", font_for_cap_height("semibold", 38), 107, (255, 255, 255), center_x=187)
-    if kind in ("wifi", "bluetooth"):
-        # "Live on <name>": capitals 846-879, centered on the card.
-        d.rectangle((70, 836, 1110, 894), fill=im.getpixel((200, 860)))
-        draw_on_baseline(d, f"Live on {PC_NAME}", font_for_cap_height("semibold", 34), 880, (255, 255, 255),
-                         center_x=590)
-    if kind == "settings":
-        # The saved pairing code's row: capitals 950-983, from x 227.
-        d.rectangle((220, 940, 1080, 996), fill=im.getpixel((700, 970)))
-        draw_on_baseline(d, PC_NAME, font_for_cap_height("regular", 34), 984, (255, 255, 255), left_x=227)
+    if kind in CHIP:
+        rename_chip(im, kind)
+    if kind == "pick":
+        # The PC's row: "ATT_DESKTOP_OLD" from x 272, "DESKTOP" at 384-598.
+        src = im.copy()
+        d.rectangle((266, 1530, 730, 1596), fill=src.getpixel((800, 1560)))
+        paste_glyph(im, src, (384, 1530, 598, 1596), (255, 255, 255), floor=40, at=(272, 1530))
     return im
 
 
@@ -86,14 +181,6 @@ def lock_wallpaper(w, h):
         ImageDraw.Draw(mask).ellipse((w * cx - R, h * cy - R, w * cx + R, h * cy + R), fill=int(255 * strength))
         im.paste(Image.new("RGB", (w, h), color), (0, 0), mask.filter(ImageFilter.GaussianBlur(w * 0.18)))
     return im
-
-
-def paste_glyph(dst, src, box, color=None, floor=60):
-    """Copies light glyphs from src (box) onto dst without their background: alpha from brightness."""
-    crop = src.crop(box)
-    alpha = crop.convert("L").point(lambda v: max(0, min(255, (v - floor) * 255 // (255 - floor))))
-    fill = Image.new("RGB", crop.size, color) if color else crop
-    dst.paste(fill, box[:2], alpha)
 
 
 def lock_screen(src, live_activity=True):
@@ -125,10 +212,11 @@ def lock_screen(src, live_activity=True):
         paste_glyph(im, src, (275, 1995, 380, 2048), (255, 255, 255))   # "Live"
         name_color = (128, 128, 134)
         paste_glyph(im, src, (284, 2063, 314, 2108), name_color, floor=40)  # Bluetooth rune
-        draw_on_baseline(d, PC_NAME, font_for_cap_height("regular", 31), 2102, name_color, left_x=344)
+        # "ATT_DESKTOP_OLD" starts at x 344; "DESKTOP" is at 446-645.
+        paste_glyph(im, src, (446, 2056, 645, 2114), name_color, floor=40, ceiling=brightness(name_color), at=(344, 2056))
 
     # Flashlight and camera, and the home indicator.
-    for cx, glyph in ((225, None), (955, "")):
+    for cx, glyph in ((225, None), (955, "\ue722")):
         d.ellipse((cx - 88, 2232, cx + 88, 2408), fill=(255, 255, 255, 38), outline=(255, 255, 255, 60), width=2)
         if glyph:
             icon = ImageFont.truetype(os.path.join(FONTS, "SegoeIcons.ttf"), 74)
@@ -155,17 +243,6 @@ def glow(canvas, center, radius, strength):
     ImageDraw.Draw(layer).ellipse((center[0] - radius, center[1] - radius, center[0] + radius, center[1] + radius),
                                   fill=int(255 * strength))
     layer = layer.filter(ImageFilter.GaussianBlur(radius * 0.45))
-    canvas.paste(Image.new("RGB", canvas.size, (255, 255, 255)), (0, 0), layer)
-
-
-def sound_rings(canvas, center, first, step, count, width, alpha):
-    """Faint concentric rings: sound spreading from the phone."""
-    layer = Image.new("L", canvas.size, 0)
-    d = ImageDraw.Draw(layer)
-    for i in range(count):
-        r = first + i * step
-        a = int(255 * alpha * (1 - i / count))
-        d.ellipse((center[0] - r, center[1] - r, center[0] + r, center[1] + r), outline=a, width=width)
     canvas.paste(Image.new("RGB", canvas.size, (255, 255, 255)), (0, 0), layer)
 
 
@@ -228,13 +305,14 @@ def text_block(draw, lines, fnt, center_x, top, fill, spacing):
 SLIDES = [
     ("wifi", ["Your iPhone is", "your PC's mic"], "Talk into your phone. Your PC hears it."),
     ("lock", ["Mute from the", "Lock Screen"], "A Live Activity with its own mute button."),
-    ("bluetooth", ["Wi-Fi or", "Bluetooth"], "No cables. Switch while you talk."),
-    ("settings", ["Private", "by design"], "Optional pairing code. No tracking."),
+    ("usb", ["Wi-Fi, Bluetooth", "or USB"], "Switch while you talk."),
+    ("muted", ["Mute with", "one tap"], "Muting releases the microphone."),
+    ("pick", ["Private", "by design"], "Straight to your PC. No account, no tracking."),
 ]
 
 
-def screenshot(screen, headline, subline, size, whole_phone=False, callout=None):
-    """whole_phone: show the bottom of the screen too (the Live Activity sits there).
+def screenshot(screen, headline, subline, size, callout=None):
+    """The whole phone under the text, tab bar included.
     callout: (image, box, corner radius, bottom) in screen pixels: that part of image shown enlarged,
     centered on its own place sideways, with its bottom edge at screen y `bottom`."""
     w, h = size
@@ -249,11 +327,9 @@ def screenshot(screen, headline, subline, size, whole_phone=False, callout=None)
         size -= 1
     text_block(d, [subline], font("semibold", size), w / 2, y + round(30 * s), (225, 236, 252), 0)
     top = round(h * 0.255)
-    width = round(w * 0.84)
-    if whole_phone:
-        # As wide as fits between the text and a bottom margin.
-        avail = h - top - round(h * 0.035)
-        width = round(avail / (screen.height / screen.width * (1 - 2 * 0.022) + 2 * 0.022))
+    # As wide as fits between the text and a bottom margin.
+    avail = h - top - round(h * 0.035)
+    width = round(avail / (screen.height / screen.width * (1 - 2 * 0.022) + 2 * 0.022))
     frame, pad = phone(screen, width)
     fx = round((w - frame.width) / 2)
     canvas.paste(frame, (fx, top - pad), frame)
@@ -277,59 +353,65 @@ def screenshot(screen, headline, subline, size, whole_phone=False, callout=None)
     return canvas
 
 
-def header(screen):
-    """Universal asset (5244 x 2950, PNG): key art inside the safe area 1402 x 962 at (1921, 660)."""
+def tab_icon(screens, kind, height):
+    """The tab bar's own icon for a connection, white, as an alpha mask `height` tall."""
+    source, box = TABS[kind]
+    crop = screens[source].crop(box).convert("L")
+    floor = max(crop.getpixel((0, 0)), crop.getpixel((crop.width - 1, crop.height - 1))) + 12
+    alpha = crop.point(lambda v: max(0, min(255, (v - floor) * 255 // (255 - floor))))
+    alpha = alpha.crop(alpha.getbbox())
+    return alpha.resize((round(alpha.width * height / alpha.height), height), Image.LANCZOS)
+
+
+def header(screens):
+    """Universal asset (5244 x 2950, PNG). It shows small on an iPhone, so: the headline and the three
+    connections, large, filling the safe area 1402 x 962 at (1921, 660) that every crop keeps."""
     w, h = 5244, 2950
     sx, sy, sw, sh = 1921, 660, 1402, 962
     canvas = gradient(w, h, (52, 140, 236), (16, 92, 200))
-    frame, pad = phone(screen, 436)  # the whole phone, 940 px tall: fits the safe area's height
-    body_h = frame.height - 2 * pad
-    px = sx + sw - 30 - (frame.width - pad)
-    py = sy + (sh - body_h) // 2 - pad
-    mic = (px + frame.width // 2, py + pad + round(body_h * 0.385))  # the big microphone button
-    sound_rings(canvas, mic, 420, 210, 14, 10, 0.16)
-    glow(canvas, mic, 700, 0.20)
-    canvas.paste(frame, (px, py), frame)
-
+    glow(canvas, (sx + sw // 2, sy + sh // 2), 900, 0.14)
     d = ImageDraw.Draw(canvas)
-    left = sx + 40
-    room = px + pad - 70 - left  # up to just before the phone
-    size = 150
-    while d.textlength("Your PC's mic.", font=font("bold", size)) > room:
+
+    lines = ["Your iPhone.", "Your PC's mic."]
+    size = 240
+    while max(d.textlength(t, font=font("bold", size)) for t in lines) > sw - 40:
         size -= 2
-    head, sub = font("bold", size), font("semibold", round(size * 0.46))
-    lines = [(t, head, (255, 255, 255), 36) for t in ("Your iPhone.", "Your PC's mic.")]
-    lines.append(("Over Wi-Fi or Bluetooth.", sub, (225, 236, 252), 0))
-    heights = [d.textbbox((0, 0), t, font=f)[3] - d.textbbox((0, 0), t, font=f)[1] for t, f, _, _ in lines]
-    total = sum(heights) + 36 + 50  # gap between the headline lines, then before the subline
+    head = font("bold", size)
+    label = font("semibold", round(size * 0.36))
+    icon_h = round(size * 0.62)
+    line_h = [d.textbbox((0, 0), t, font=head)[3] - d.textbbox((0, 0), t, font=head)[1] for t in lines]
+    label_h = d.textbbox((0, 0), "Wi-Fi", font=label)[3] - d.textbbox((0, 0), "Wi-Fi", font=label)[1]
+    line_gap, row_gap, label_gap = round(size * 0.22), round(size * 0.55), round(size * 0.16)
+    total = sum(line_h) + line_gap + row_gap + icon_h + label_gap + label_h
     top = sy + (sh - total) // 2
-    for (text, fnt, fill, gap), height in zip(lines, heights):
-        if fnt is sub:
-            top += 50 - 36
-        x0, y0, _, _ = d.textbbox((0, 0), text, font=fnt)
-        d.text((left - x0, top - y0), text, font=fnt, fill=fill)
-        top += height + 36
+    y = text_block(d, lines, head, sx + sw / 2, top, (255, 255, 255), line_gap) - line_gap + row_gap
+
+    items = [("wifi", "Wi-Fi"), ("bluetooth", "Bluetooth"), ("usb", "USB")]
+    slot = sw // 3
+    for i, (kind, text) in enumerate(items):
+        cx = sx + slot * i + slot // 2
+        mask = tab_icon(screens, kind, icon_h)
+        canvas.paste(Image.new("RGB", mask.size, (255, 255, 255)), (round(cx - mask.width / 2), y), mask)
+        text_block(d, [text], label, cx, y + icon_h + label_gap, (230, 240, 253), 0)
     return canvas
 
 
 if __name__ == "__main__":
     src = sys.argv[1] if len(sys.argv) > 1 else os.path.expanduser("~/Downloads")
-    cleaned = {k: clean(Image.open(os.path.join(src, v)), k) for k, v in SOURCES.items() if k != "lock"}
-    lock_src = Image.open(os.path.join(src, SOURCES["lock"])).convert("RGB")
-    cleaned["lock"] = lock_screen(lock_src, live_activity=False)  # shown enlarged on top instead
-    lock_with_activity = lock_screen(lock_src)
+    raw = {k: Image.open(os.path.join(src, v)).convert("RGB") for k, v in SOURCES.items()}
+    cleaned = {k: clean(im, k) for k, im in raw.items() if k != "lock"}
+    cleaned["lock"] = lock_screen(raw["lock"], live_activity=False)  # shown enlarged on top instead
+    lock_with_activity = lock_screen(raw["lock"])
     for folder, size in (("6.1", (1179, 2556)), ("6.9", (1320, 2868))):
         folder_path = os.path.join(OUT, "screenshots", folder)
         os.makedirs(folder_path, exist_ok=True)
         for old in os.listdir(folder_path):
             os.remove(os.path.join(folder_path, old))
         for i, (kind, headline, subline) in enumerate(SLIDES, 1):
-            path = os.path.join(OUT, "screenshots", folder, f"{i}-{kind}.png")
-            lock = kind == "lock"
+            path = os.path.join(folder_path, f"{i}-{kind}.png")
             # The Lock Screen buttons span y 2232-2408 and leave 148 px to the screen's bottom edge
             # (2556): the enlarged Live Activity ends the same 148 px above them.
             callout = (lock_with_activity, (40, 1934, 1139, 2171), 70, 2232 - (2556 - 2408))
-            screenshot(cleaned[kind], headline, subline, size, whole_phone=lock,
-                       callout=callout if lock else None).save(path)
-    header(cleaned["wifi"]).save(os.path.join(OUT, "header-universal.png"))
+            screenshot(cleaned[kind], headline, subline, size, callout=callout if kind == "lock" else None).save(path)
+    header(raw).save(os.path.join(OUT, "header-universal.png"))
     print("wrote", OUT)
