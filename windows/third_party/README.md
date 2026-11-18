@@ -15,6 +15,21 @@
   SwiftPM target (`Sources/COpus`) and encodes with it. The license notice ships with both: the build copies
   `COPYING` to `licenses/opus/` next to `Phomic.exe`, and the iOS app shows it under *Settings › Acknowledgements*.
 
+## Microsoft components
+
+- **Windows App SDK runtime** (WinUI 3 and the rest of the runtime, version in `windows/Phomic/packages.config`):
+  Phomic is self-contained, so the runtime's files ship next to `Phomic.exe`. Microsoft's license terms allow that
+  ("distributable code") as long as Phomic adds real functionality, the people who install it agree to terms that
+  protect the runtime as much as Microsoft's do, and Microsoft's trademarks don't suggest Microsoft made or endorses
+  Phomic. The installer's license page (`windows/installer/License.txt`) covers the second point. The license and
+  Microsoft's third-party notices ship in `licenses/microsoft/windows-app-sdk/`.
+- **WebView2** (comes with the Windows App SDK): BSD-style license, in `licenses/microsoft/webview2/`.
+- **C++/WinRT** and **WIL** (Windows Implementation Libraries), compiled into `Phomic.exe`: MIT, in
+  `licenses/microsoft/cppwinrt/` and `licenses/microsoft/wil/`.
+- **WinUI's CheckBox template**: `App.xaml` uses WinUI's own CheckBox template with a plain check mark instead of
+  the animated one. It's from microsoft-ui-xaml (https://github.com/microsoft/microsoft-ui-xaml), MIT, in
+  `licenses/microsoft/microsoft-ui-xaml/`.
+
 ## VB-CABLE (not included)
 
 - **What:** VB-CABLE Virtual Audio Device by Vincent Burel / VB-Audio (www.vb-cable.com), donationware.

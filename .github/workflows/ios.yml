@@ -2,7 +2,7 @@
 # Run it from the Actions tab: "iOS app" > Run workflow.
 #   - Upload off: only checks that the Xcode build works (unsigned, needs no secrets).
 #   - Upload on:  signs it for the App Store and uploads it to App Store Connect, where it
-#                 shows up under TestFlight. Needs the secret APPLE_SIGNING (README.md,
+#                 shows up under TestFlight. Needs the secret APPLE_SIGNING (docs/development.md,
 #                 "App Store builds").
 # Pushes to main that change the iOS app run the check by themselves.
 name: iOS app
@@ -59,7 +59,7 @@ jobs:
           APPLE_SIGNING: ${{ secrets.APPLE_SIGNING }}
         run: |
           if [ -z "$APPLE_SIGNING" ]; then
-            echo "The APPLE_SIGNING secret is missing: see README.md, App Store builds."
+            echo "The APPLE_SIGNING secret is missing: see docs/development.md, App Store builds."
             exit 1
           fi
           work="$RUNNER_TEMP/signing"

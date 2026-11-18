@@ -119,6 +119,8 @@
     <ClInclude Include="pch.h" />
     <ClInclude Include="Protocol.h" />
     <ClInclude Include="JitterBuffer.h" />
+    <ClInclude Include="AutoGain.h" />
+    <ClInclude Include="Limiter.h" />
     <ClInclude Include="AudioOutput.h" />
     <ClInclude Include="StreamServer.h" />
     <ClInclude Include="Settings.h" />
@@ -200,6 +202,33 @@
     <!-- libopus is BSD-licensed: its notice ships with the binary. -->
     <CopyFileToFolders Include="..\third_party\opus\COPYING">
       <DestinationFolders>$(OutDir)licenses\opus</DestinationFolders>
+    </CopyFileToFolders>
+    <!--
+      Microsoft's parts that ship with Phomic (the Windows App SDK runtime is self-contained, so
+      its files are next to Phomic.exe) or are compiled into it: their license terms and notices.
+      The four Windows App SDK packages share one license text.
+    -->
+    <CopyFileToFolders Include="..\packages\Microsoft.WindowsAppSDK.WinUI.*\license.txt">
+      <DestinationFolders>$(OutDir)licenses\microsoft\windows-app-sdk</DestinationFolders>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="..\packages\Microsoft.WindowsAppSDK.Base.*\NOTICE.txt">
+      <DestinationFolders>$(OutDir)licenses\microsoft\windows-app-sdk\base</DestinationFolders>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="..\packages\Microsoft.WindowsAppSDK.WinUI.*\NOTICE.txt">
+      <DestinationFolders>$(OutDir)licenses\microsoft\windows-app-sdk\winui</DestinationFolders>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="..\packages\Microsoft.Web.WebView2.*\LICENSE.txt;..\packages\Microsoft.Web.WebView2.*\NOTICE.txt">
+      <DestinationFolders>$(OutDir)licenses\microsoft\webview2</DestinationFolders>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="..\packages\Microsoft.Windows.CppWinRT.*\LICENSE">
+      <DestinationFolders>$(OutDir)licenses\microsoft\cppwinrt</DestinationFolders>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="..\packages\Microsoft.Windows.ImplementationLibrary.*\LICENSE;..\packages\Microsoft.Windows.ImplementationLibrary.*\ThirdPartyNotices.txt">
+      <DestinationFolders>$(OutDir)licenses\microsoft\wil</DestinationFolders>
+    </CopyFileToFolders>
+    <!-- App.xaml's CheckBox template comes from WinUI's source (microsoft-ui-xaml, MIT). -->
+    <CopyFileToFolders Include="..\third_party\microsoft-ui-xaml\LICENSE">
+      <DestinationFolders>$(OutDir)licenses\microsoft\microsoft-ui-xaml</DestinationFolders>
     </CopyFileToFolders>
   </ItemGroup>
   <!--

@@ -42,9 +42,6 @@ namespace phomic
         // `measureTiming`: false for frames that didn't arrive by themselves (e.g. concealment).
         void Push(uint32_t seq, const int16_t* samples, bool measureTiming = true);
 
-        // Tests drive time themselves.
-        void SetClockForTesting(std::function<double()> nowMs) { m_clock = std::move(nowMs); }
-
         // Fill `count` mono float samples. Always succeeds; produces silence when
         // there is nothing to play.
         void Read(float* out, uint32_t count);
@@ -108,7 +105,7 @@ namespace phomic
         uint32_t m_boostFrames = 0;     // extra cushion after recent underruns
         double m_boostAt = 0;
         double m_lowSince = -1;         // when a smaller target first looked enough
-        std::function<double()> m_clock;
+        std::vector<double> m_delays = std::vector<double>(kTimingWindow); // UpdateAutoTargetLocked's scratch: no allocating under the lock
 
         Stats m_stats;
     };

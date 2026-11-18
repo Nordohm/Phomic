@@ -1,0 +1,23 @@
+Phomic
+Copyright (c) 2026 Nordohm
+
+Phomic is free and open source under the MIT License (below). It also contains software by others, under their own terms, which you agree to as well by installing it. The full texts are in the "licenses" folder next to Phomic.exe:
+
+- Microsoft Windows App SDK runtime (Microsoft Corporation): Microsoft's license terms, which among other things don't allow reverse engineering it or distributing it apart from Phomic.
+- WebView2, C++/WinRT, WIL and part of WinUI (Microsoft Corporation): open-source licenses (BSD and MIT).
+- libopus (Xiph.Org Foundation and others): BSD license.
+
+Phomic doesn't include VB-CABLE, the virtual audio driver it uses. You get that from VB-Audio, under their terms.
+
+Phomic isn't made, sponsored or endorsed by Apple, Microsoft, VB-Audio or the Bluetooth SIG. Apple, iPhone, App Store and Apple Devices are trademarks of Apple Inc. Windows is a trademark of Microsoft Corporation. Bluetooth is a registered trademark of Bluetooth SIG, Inc. VB-CABLE is by VB-Audio.
+
+
+MIT License
+
+Copyright (c) 2026 Nordohm
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.

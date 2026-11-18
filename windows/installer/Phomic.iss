@@ -24,7 +24,7 @@ PrivilegesRequiredOverridesAllowed=dialog
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0.17763
-LicenseFile=..\..\LICENSE
+LicenseFile=License.txt
 SetupIconFile=..\Phomic\Assets\Phomic.ico
 UninstallDisplayIcon={app}\Phomic.exe
 UninstallDisplayName=Phomic
@@ -46,6 +46,7 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 Source: "..\x64\Release\Phomic\*"; DestDir: "{app}"; Excludes: "*.pdb,*.lib,*.exp,*.ilk,VBCABLE"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\..\LICENSE"; DestDir: "{app}\licenses"; DestName: "Phomic.txt"; Flags: ignoreversion
 Source: "..\third_party\README.md"; DestDir: "{app}\licenses"; DestName: "third-party.md"; Flags: ignoreversion
+Source: "License.txt"; DestDir: "{app}\licenses"; DestName: "README.txt"; Flags: ignoreversion
 
 [Icons]
 Name: "{autoprograms}\Phomic"; Filename: "{app}\Phomic.exe"

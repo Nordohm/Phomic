@@ -1,6 +1,6 @@
 import Foundation
 
-/// Wire protocol shared with the Windows app (see the repo README, "Protocol").
+/// Wire protocol shared with the Windows app (see docs/protocols.md).
 ///
 /// Control: TCP, one UTF-8 JSON object per line.
 /// Audio:   UDP datagrams, little-endian:
@@ -17,6 +17,21 @@ enum WireProtocol {
     /// Where the iPhone waits for the PC over USB (loopback only, see UsbListener).
     static let usbPort: UInt16 = 50505
     static let magic: [UInt8] = Array("PHMC".utf8)
+
+    /// One audio packet (layout above), the samples clamped to -1...1.
+    static func audioPacket(session: UInt32, sequence: UInt32, frame: [Float]) -> Data {
+        var packet = Data(count: 12 + 2 * frame.count)
+        packet.withUnsafeMutableBytes { bytes in
+            bytes.copyBytes(from: magic)
+            bytes.storeBytes(of: session.littleEndian, toByteOffset: 4, as: UInt32.self)
+            bytes.storeBytes(of: sequence.littleEndian, toByteOffset: 8, as: UInt32.self)
+            for (index, sample) in frame.enumerated() {
+                let value = Int16(max(-1, min(1, sample)) * 32767)
+                bytes.storeBytes(of: value.littleEndian, toByteOffset: 12 + 2 * index, as: Int16.self)
+            }
+        }
+        return packet
+    }
 }
 
 /// Every control message, in either direction. Unused fields are left out of the JSON.

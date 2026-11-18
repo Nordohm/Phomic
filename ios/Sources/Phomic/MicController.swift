@@ -3,6 +3,7 @@ import Network
 import Observation
 import UIKit
 import PhomicActivity
+import os
 
 /// App state: finding PCs (Bonjour over Wi-Fi, announcements over Bluetooth), the
 /// connection lifecycle on each transport (Wi-Fi, Bluetooth, or a USB cable, where the PC
@@ -67,6 +68,9 @@ final class MicController {
 
     private(set) var phase: Phase = .idle {
         didSet {
+            if phase != oldValue {
+                Self.log.notice("\(Self.describe(self.phase), privacy: .public)\(self.transport.map { " over \($0.rawValue)" } ?? "", privacy: .public)")
+            }
             if (oldValue == .idle) != (phase == .idle) {
                 updateScanning()
                 updateUsbStandby()
@@ -98,18 +102,13 @@ final class MicController {
     var isMuted = false {
         didSet {
             guard isMuted != oldValue else { return }
+            Self.log.notice("\(self.isMuted ? "muted" : "unmuted", privacy: .public)")
             client.setMuted(isMuted)
             bluetooth.setMuted(isMuted)
             usbClient.setMuted(isMuted)
             refreshLiveActivity()
             if isActive {
-                // Starting or stopping the microphone blocks this thread for a moment: let the
-                // button show the change first, then switch the audio.
-                Task { @MainActor [weak self] in
-                    try? await Task.sleep(for: .milliseconds(20))
-                    guard let self, self.isActive else { return }
-                    self.applyAudioState()
-                }
+                applyAudioState() // off the main thread, so the button animates meanwhile
             }
         }
     }
@@ -174,6 +173,7 @@ final class MicController {
     /// Set while a switch the PC asked for is under way (see switchForPC).
     @ObservationIgnored private var pcAskedToSwitch = false
     @ObservationIgnored private let liveActivity = LiveActivityController()
+    @ObservationIgnored private var levelUpdates = 0
 
     private enum Keys {
         static let manualHost = "manualHost"
@@ -254,6 +254,8 @@ final class MicController {
         ToggleMuteIntent.handler = { [weak self] in
             guard let self, self.isActive else { return }
             self.isMuted.toggle()
+            // iOS may suspend Phomic once the intent returns: finish switching the audio first.
+            await self.capture.idle()
         }
         observeAudioSession()
         observeCable()
@@ -443,31 +445,39 @@ final class MicController {
         }
         guard self.transport == transport else { return false }
         applyAudioState()
+        await capture.idle() // a failure has stopped everything by then
         return self.transport == transport
     }
 
-    /// Microphone when live, silent keep-alive when muted.
+    /// Microphone when live, silent keep-alive when muted. The switch happens off the main
+    /// thread (see AudioCapture); this returns at once.
     private func applyAudioState(restart: Bool = false) {
-        let unmuting = !isMuted && capture.state == .keepingAlive
-        do {
-            if isMuted {
-                if capture.state != .keepingAlive || restart {
-                    try capture.startKeepAlive()
-                }
-            } else if !capture.isCapturing || restart {
-                try capture.startCapture(fromBackground: UIApplication.shared.applicationState != .active)
-            }
-        } catch {
+        let target: AudioCapture.State = isMuted ? .keepingAlive : .capturing
+        guard target != capture.wanted || restart else { return }
+        let unmuting = target == .capturing && capture.wanted == .keepingAlive
+        capture.set(target, restart: restart,
+                    fromBackground: UIApplication.shared.applicationState != .active) { [weak self] outcome in
+            self?.audioStateApplied(outcome, unmuting: unmuting)
+        }
+    }
+
+    private func audioStateApplied(_ outcome: AudioCapture.Outcome, unmuting: Bool) {
+        switch outcome {
+        case .done: Self.log.notice("audio: \(String(describing: self.capture.state), privacy: .public)")
+        case .failed(let error): Self.log.error("audio failed: \(error.localizedDescription, privacy: .public)")
+        case .replaced: break
+        }
+        if case .failed(let error) = outcome, isActive {
             let code = (error as NSError).code
             if unmuting {
                 // e.g. unmuting from the Live Activity, and iOS said no: stay connected, muted.
                 lastError = "Couldn't turn the microphone on (error \(code)). Unmute here instead."
-                isMuted = true // didSet restarts the silent keep-alive
-                return
+                isMuted = true // didSet starts the silent keep-alive
+            } else {
+                let message = "Couldn't start the microphone: \(error.localizedDescription) (error \(code))"
+                stopAll()
+                lastError = message
             }
-            let message = "Couldn't start the microphone: \(error.localizedDescription) (error \(code))"
-            stopAll()
-            lastError = message
         }
         if !capture.isCapturing {
             level = 0
@@ -723,7 +733,7 @@ final class MicController {
         bluetooth.stop()
         usbListener.stop()
         usbClient.disconnect()
-        capture.stop()
+        capture.set(.stopped)
         phase = .idle
         level = 0
         roundTripMs = nil
@@ -798,15 +808,33 @@ final class MicController {
         .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
+    // MARK: - Log
+
+    /// The session's steps (category Session; with the iPhone plugged in, `idevicesyslog -p Phomic`).
+    private static let log = Logger(subsystem: "io.github.nordohm.Phomic", category: "Session")
+
+    private static func describe(_ phase: Phase) -> String {
+        switch phase {
+        case .idle: "idle"
+        case .connecting: "connecting"
+        case .streaming: "streaming"
+        case .reconnecting: "reconnecting"
+        }
+    }
+
     // MARK: - Level and Mic Mode
 
     private func updateLevel(_ peak: Float) {
         guard isActive, capture.isCapturing else { return }
         let db = peak > 0.000_01 ? 20 * log10(min(peak, 1)) : -100
         level = max(0, min(1, (db + 60) / 60))
-        let mode = Self.describe(AVCaptureDevice.activeMicrophoneMode)
-        if mode != systemMicMode {
-            systemMicMode = mode
+        // The Mic Mode changes rarely: look once a second (levels come 20 times a second).
+        levelUpdates &+= 1
+        if systemMicMode == nil || levelUpdates % 20 == 0 {
+            let mode = Self.describe(AVCaptureDevice.activeMicrophoneMode)
+            if mode != systemMicMode {
+                systemMicMode = mode
+            }
         }
     }
 

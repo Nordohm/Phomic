@@ -23,10 +23,6 @@ namespace phomic
 
     double JitterBuffer::NowMs() const
     {
-        if (m_clock)
-        {
-            return m_clock();
-        }
         using namespace std::chrono;
         return duration<double, std::milli>(steady_clock::now().time_since_epoch()).count();
     }
@@ -122,7 +118,8 @@ namespace phomic
         {
             return; // not enough data yet (1 s)
         }
-        std::vector<double> delays(m_offsets.begin(), m_offsets.begin() + static_cast<std::ptrdiff_t>(m_offsetCount));
+        std::vector<double>& delays = m_delays;
+        delays.assign(m_offsets.begin(), m_offsets.begin() + static_cast<std::ptrdiff_t>(m_offsetCount));
         const double earliest = *std::min_element(delays.begin(), delays.end());
         for (double& d : delays)
         {

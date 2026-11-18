@@ -240,7 +240,8 @@ def t_refused_retries():
         return int(out or 0)
     mux.attach(1, False)
     time.sleep(0.5)
-    before, tw_before = mux.attempts, phomic_time_waits()
+    tw_before = phomic_time_waits()  # first: PowerShell takes a second or two to start
+    before = mux.attempts
     time.sleep(3)
     tries = mux.attempts - before
     tw = phomic_time_waits() - tw_before
@@ -335,10 +336,10 @@ def t_switch_here():
     phone, _ = session()
     phone.audio(20)
     time.sleep(0.6)
-    clicked = wifi.click("Switch here")  # the first one: Wi-Fi
+    clicked = wifi.click("Switch to Wi-Fi")
     got = phone.line(3)
     phone.send({"type": "bye"}); phone.close()
-    return got == {"type": "switch", "transport": "wifi"}, f"Switch here ({clicked}): {got}"
+    return got == {"type": "switch", "transport": "wifi"}, f"Switch ({clicked}): {got}"
 
 
 def t_wifi_takes_over():

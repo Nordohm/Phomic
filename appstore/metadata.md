@@ -46,8 +46,8 @@ MUTE FROM ANYWHERE
 • Muting fully releases the microphone.
 
 SOUNDS LIKE YOUR IPHONE
-• Phomic sends the microphone as it is and adds no processing of its own.
-• Choose Standard, Voice Isolation or Wide Spectrum with the iPhone's Mic Mode.
+• Phomic sends the microphone as it is. Choose Standard, Voice Isolation or Wide Spectrum with the iPhone's Mic Mode.
+• The PC app evens out the level automatically, or you set it yourself.
 
 PRIVATE BY DESIGN
 • Audio goes straight from your iPhone to your PC, over your own network, Bluetooth or a cable. Nothing goes through the internet.
@@ -63,11 +63,11 @@ WHAT YOU NEED
 **What's New in This Version** (4,000)
 
 ```
-• USB: plug your iPhone into your PC for the lowest latency. Pick the USB tab and Phomic on the PC connects by itself. Needs Phomic 1.1 for Windows and Apple's free Apple Devices app.
-• A new look: Wi-Fi, Bluetooth and USB as tabs, Liquid Glass on iOS 26, and the screen glows with your voice while you're live.
-• Clearer status: Live, Muted or Connecting, with your PC's name below.
-• The Live Activity goes away when you close Phomic.
-• Settings shows the app's version, and saved pairing codes are listed as Paired PCs.
+• Automatic gain: Phomic 1.2 for Windows keeps your voice at an even level.
+• Muting and unmuting are smoother.
+• The glow warms through yellow and orange as you get loud, instead of jumping to red.
+• The Live Activity no longer says "Phomic stopped" while you're live.
+• Phomic tells you when a new version is out.
 ```
 
 **Keywords** (100; words from the name and subtitle are already indexed)

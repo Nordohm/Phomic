@@ -85,6 +85,7 @@ private struct ConnectionScreen: View {
     let transport: MicController.Transport
     @Binding var showSettings: Bool
     @Environment(MicController.self) private var model
+    @Environment(UpdateCheck.self) private var updates
 
     private var isStreaming: Bool {
         if case .streaming = model.phase { return true }
@@ -109,6 +110,10 @@ private struct ConnectionScreen: View {
                                 LiveView()
                                     .frame(height: max(0, height - Self.verticalPadding))
                             } else {
+                                if let version = updates.available {
+                                    UpdateCard(version: version)
+                                        .transition(.opacity)
+                                }
                                 if let error = model.lastError {
                                     ErrorCard(message: error)
                                         .transition(.opacity)
@@ -131,6 +136,7 @@ private struct ConnectionScreen: View {
                     .padding(.vertical, margin)
                     .animation(.snappy, value: model.isActive)
                     .animation(.snappy, value: model.lastError)
+                    .animation(.snappy, value: updates.available)
                 }
             }
             // The whole screen, so `screen` knows the bars; the margins above keep content clear
@@ -140,8 +146,7 @@ private struct ConnectionScreen: View {
             .scrollBounceBehavior(.basedOnSize)
             .backgroundPreferenceValue(MicButtonKey.self) { button in
                 if let button, model.isActive {
-                    VoiceGlow(button: button, level: model.level,
-                              isLive: isStreaming && !model.isMuted, isMuted: isStreaming && model.isMuted)
+                    VoiceGlow(button: button, isLive: isStreaming && !model.isMuted, isMuted: isStreaming && model.isMuted)
                 }
             }
             .background(Color(.systemGroupedBackground))
@@ -193,6 +198,46 @@ private struct PressableStyle: ButtonStyle {
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
             .opacity(configuration.isPressed ? 0.85 : 1)
             .animation(.snappy(duration: 0.15), value: configuration.isPressed)
+    }
+}
+
+/// A newer Phomic is on the App Store (UpdateCheck). Shown with the list of PCs, not during a
+/// session.
+private struct UpdateCard: View {
+    let version: String
+    @Environment(UpdateCheck.self) private var updates
+    @Environment(\.openURL) private var openURL
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Button {
+                openURL(UpdateCheck.appStore)
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "arrow.down.circle.fill")
+                        .font(.title2)
+                        .foregroundStyle(.tint)
+                    Text("Phomic \(version) is available")
+                        .font(.subheadline.weight(.semibold))
+                    Spacer(minLength: 0)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(PressableStyle())
+            .accessibilityHint("Opens the App Store")
+
+            Button {
+                updates.dismiss()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .padding(6)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Not now")
+        }
+        .card()
     }
 }
 
@@ -381,25 +426,32 @@ private struct MicButtonKey: PreferenceKey {
 
 /// Your voice as light: a gradient from the mute button's edge out to the screen's edges, which
 /// brightens and reaches further while you talk and settles when you're quiet. It rises fast and
-/// fades slowly, so it breathes rather than flickers. Red when the sound clips; a still, faint
-/// red while muted.
+/// fades slowly, so it breathes rather than flickers. As the sound nears full scale it warms up,
+/// like a level meter: from green through yellow and orange (-9 dB) to red (0 dB). A still,
+/// faint red while muted.
 ///
 /// It's drawn every frame from the latest level (TimelineView), not when the level changes: in
 /// silence the level stays at the same value, and a glow that only moved on changes would stop
-/// wherever it was.
+/// wherever it was. While muted it stands still, so drawing stops once the fade to red is done.
+/// It reads the level itself, so the screen around it doesn't redraw 20 times a second too.
 private struct VoiceGlow: View {
     let button: Anchor<CGRect>
-    let level: Float
     let isLive: Bool
     let isMuted: Bool
 
+    @Environment(MicController.self) private var model
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var smoother = GlowSmoother()
+    /// Still fading after muting or unmuting: keep drawing a little longer.
+    @State private var fading = false
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !isLive)) { context in
-            let glow = smoother.next(toward: isLive ? target : 0, at: context.date)
+        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !isLive && !fading)) { context in
+            let look = smoother.next(level: isLive ? target : 0, muted: isMuted, loudness: isLive ? loudness : 0,
+                                     at: context.date)
+            let tint = Self.warm(look.heat, colorScheme).mix(with: .red, by: look.muted)
+            let amount = strength * look.amount
             GeometryReader { proxy in
                 let rect = proxy[button]
                 let size = proxy.size
@@ -409,11 +461,10 @@ private struct VoiceGlow: View {
                            CGPoint(x: size.width, y: size.height)]
                     .map { hypot($0.x - center.x, $0.y - center.y) }
                     .max() ?? 1
-                let amount = amount(glow)
                 RadialGradient(
                     stops: [
                         .init(color: tint.opacity(amount), location: 0),
-                        .init(color: tint.opacity(amount * 0.35), location: middle(glow)),
+                        .init(color: tint.opacity(amount * 0.35), location: look.middle),
                         .init(color: tint.opacity(0), location: 1),
                     ],
                     center: UnitPoint(x: center.x / max(size.width, 1), y: center.y / max(size.height, 1)),
@@ -422,10 +473,15 @@ private struct VoiceGlow: View {
                 )
             }
         }
+        .task(id: isMuted) {
+            fading = true
+            try? await Task.sleep(for: .seconds(1))
+            guard !Task.isCancelled else { return }
+            fading = false
+        }
         .ignoresSafeArea()
         .opacity(isLive || isMuted ? 1 : 0)
-        .animation(.easeInOut(duration: 0.4), value: isLive)
-        .animation(.easeInOut(duration: 0.4), value: isMuted)
+        .animation(.easeInOut(duration: 0.4), value: isLive || isMuted)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
@@ -434,39 +490,82 @@ private struct VoiceGlow: View {
     /// around -45 dB (0.25) and talking at arm's length around -30 to -20 dB, so -45 dB is dark
     /// and -21 dB full.
     private var target: CGFloat {
-        reduceMotion ? 0.4 : CGFloat(min(1, max(0, (level - 0.25) / 0.4)))
+        reduceMotion ? 0.4 : CGFloat(min(1, max(0, (model.level - 0.25) / 0.4)))
+    }
+
+    /// How close to full scale, 0...1: 0 up to -9 dB, 1 at 0 dB, smooth in between.
+    private var loudness: Double {
+        let x = min(1, max(0, (Double(model.level) - 0.85) / 0.15))
+        return x * x * (3 - 2 * x)
     }
 
     /// The same color reads stronger on black (it's the only light there) than as a tint on
     /// a light background, so dark mode gets less of it.
     private var strength: Double { colorScheme == .dark ? 0.34 : 0.6 }
 
-    /// Square root: ordinary talking already shows well; shouting only adds a little more.
-    private func amount(_ glow: CGFloat) -> Double {
-        isMuted ? strength * 0.35 : strength * (0.15 + 0.85 * sqrt(Double(glow)))
-    }
-
-    private func middle(_ glow: CGFloat) -> Double {
-        isMuted ? 0.22 : 0.2 + 0.4 * sqrt(Double(glow))
-    }
-
-    private var tint: Color {
-        isMuted || level > 0.97 ? .red : .green
+    /// Green (0) to red (1) the way a level meter goes: around the color wheel, through yellow
+    /// and orange. (Mixing the two directly passes through a muddy olive.) Red's hue can be just
+    /// under 1 rather than just over 0 (iOS 26's red has a touch more blue than green), and going
+    /// up to it from green would pass through blue, so the way round is always down through 0.
+    private static func warm(_ heat: Double, _ scheme: ColorScheme) -> Color {
+        let traits = UITraitCollection(userInterfaceStyle: scheme == .dark ? .dark : .light)
+        func hsb(_ color: UIColor) -> (Double, Double, Double) {
+            var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+            color.resolvedColor(with: traits).getHue(&h, saturation: &s, brightness: &b, alpha: &a)
+            return (Double(h), Double(s), Double(b))
+        }
+        let (gh, gs, gb) = hsb(.systemGreen)
+        var (rh, rs, rb) = hsb(.systemRed)
+        if rh > gh { rh -= 1 }
+        var hue = gh + (rh - gh) * heat
+        if hue < 0 { hue += 1 }
+        return Color(hue: hue, saturation: gs + (rs - gs) * heat, brightness: gb + (rb - gb) * heat)
     }
 }
 
-/// Eases the glow toward its target over time: up in about 0.1 s, down in about 0.7 s.
-/// A class, so the frame-by-frame value can change while the view is drawn.
+/// Eases the glow toward where it's heading, frame by frame. The voice goes up in about 0.1 s
+/// and down in about 0.7 s, and so does the warming up when it's loud (back in about 1.5 s); the
+/// change between live and muted takes about half a second. A class, so the values can change
+/// while the view is drawn.
 private final class GlowSmoother {
-    private var value: CGFloat = 0
+    struct Look {
+        /// 0...1, times the color scheme's strength.
+        var amount: Double
+        /// Where the gradient is at a third of its brightness, 0...1 of the way out.
+        var middle: Double
+        /// 0 green ... 1 red, through yellow and orange: how loud.
+        var heat: Double
+        /// 0 live ... 1 muted.
+        var muted: Double
+    }
+
+    private var glow: Double = 0
+    private var muted: Double = 0
+    private var heat: Double = 0
     private var last: Date?
 
-    func next(toward target: CGFloat, at now: Date) -> CGFloat {
-        let elapsed = min(0.1, max(0, last.map { now.timeIntervalSince($0) } ?? 0))
+    func next(level target: CGFloat, muted isMuted: Bool, loudness: Double, at now: Date) -> Look {
+        // After a pause (muted, nothing drawn), carry on from here rather than jump ahead.
+        let gap = last.map { now.timeIntervalSince($0) } ?? 0
+        let elapsed = gap > 0 && gap < 0.1 ? gap : 1.0 / 60
         last = now
-        let timeConstant = target > value ? 0.08 : 0.7
-        value += (target - value) * CGFloat(1 - exp(-elapsed / timeConstant))
-        return value
+        func ease(_ value: inout Double, toward target: Double, _ timeConstant: Double) {
+            value += (target - value) * (1 - exp(-elapsed / timeConstant))
+        }
+        ease(&glow, toward: Double(target), Double(target) > glow ? 0.08 : 0.7)
+        ease(&muted, toward: isMuted ? 1 : 0, 0.15)
+        ease(&heat, toward: loudness, loudness > heat ? 0.08 : 0.5)
+
+        // Square root: ordinary talking already shows well; shouting only adds a little more.
+        let voice = sqrt(max(0, glow))
+        let live = (amount: 0.15 + 0.85 * voice, middle: 0.2 + 0.4 * voice)
+        let still = (amount: 0.35, middle: 0.22)
+        return Look(
+            amount: live.amount + (still.amount - live.amount) * muted,
+            middle: live.middle + (still.middle - live.middle) * muted,
+            heat: heat,
+            muted: muted
+        )
     }
 }
 
@@ -759,8 +858,8 @@ private struct SettingsView: View {
                     Text("Paired PCs")
                 } footer: {
                     Text(model.savedPairings.isEmpty
-                         ? "PCs that ask for a pairing code show up here once you've entered it."
-                         : "Swipe to forget a PC. Phomic asks for its code again next time.")
+                         ? "PCs show up here once you enter their code."
+                         : "Swipe to forget a PC.")
                 }
 
                 if !model.savedPairings.isEmpty {

@@ -13,11 +13,11 @@ public struct ToggleMuteIntent: LiveActivityIntent, AudioRecordingIntent {
 
     public init() {}
 
-    @MainActor public static var handler: (@MainActor () -> Void)?
+    @MainActor public static var handler: (@MainActor () async -> Void)?
 
     @MainActor
     public func perform() async throws -> some IntentResult {
-        Self.handler?()
+        await Self.handler?()
         return .result()
     }
 }

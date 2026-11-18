@@ -3,12 +3,16 @@
     python -I fake_iphone_wifi.py            all tests
     python -I fake_iphone_wifi.py ping mute  only those
 
+auto_gain checks automatic gain (on in Phomic unless you turned it off).
+
 Talks to 127.0.0.1:50505 (TCP control + UDP audio) and reads the PC window through UI
 Automation (read_phomic.ps1 next to this file) where the result only shows there.
 """
 import json
 import math
 import pathlib
+import random
+import re
 import socket
 import struct
 import subprocess
@@ -76,11 +80,15 @@ class Conn:
 
     def audio(self, frames, session=None, level=0.3):
         for _ in range(frames):
-            samples = [int(level * 32767 * math.sin(2 * math.pi * 440 * (self.seq * 480 + i) / 48000)) for i in range(480)]
-            packet = b"PHMC" + struct.pack("<II", session if session is not None else self.session, self.seq) + struct.pack("<480h", *samples)
-            self.udp.sendto(packet, (HOST, self.udp_port))
-            self.seq += 1
+            self.frame([level * math.sin(2 * math.pi * 440 * (self.seq * 480 + i) / 48000) for i in range(480)], session)
             time.sleep(0.01)
+
+    def frame(self, samples, session=None):
+        """One 10 ms packet: 480 samples, -1...1."""
+        pcm = [max(-32767, min(32767, int(x * 32767))) for x in samples]
+        packet = b"PHMC" + struct.pack("<II", session if session is not None else self.session, self.seq) + struct.pack("<480h", *pcm)
+        self.udp.sendto(packet, (HOST, self.udp_port))
+        self.seq += 1
 
     def close(self):
         for s in (self.s, self.udp):
@@ -237,9 +245,9 @@ def t_disconnect_button():
 def t_switch_button():
     c = Conn(); c.welcome(); c.audio(20)
     time.sleep(0.5)
-    clicked = click("Switch here")  # the first one: Bluetooth, while Wi-Fi is in use
+    clicked = click("Switch to Bluetooth")  # while Wi-Fi is in use
     got = c.line(3); c.send({"type": "bye"}); c.close()
-    return clicked == "clicked" and got == {"type": "switch", "transport": "bluetooth"}, f"Switch here ({clicked}): {got}"
+    return clicked == "clicked" and got == {"type": "switch", "transport": "bluetooth"}, f"Switch ({clicked}): {got}"
 
 
 def t_pairing():
@@ -255,9 +263,41 @@ def t_pairing():
     return ok, f"no code: {r1.get('message')} · wrong: {r2.get('message')} · right: {r3.get('type')}"
 
 
+def auto_gain_on():
+    """Whether Phomic uses automatic gain (its setting; 1 unless turned off)."""
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Phomic") as key:
+            return winreg.QueryValueEx(key, "AutoGain")[0] != 0
+    except OSError:
+        return True
+
+
+def t_auto_gain():
+    """Talking at -35 dBFS (RMS) over a quiet room: automatic gain settles near +12 dB (to -23)."""
+    if not auto_gain_on():
+        return True, "skipped: automatic gain is off in Phomic"
+    c = Conn(); c.welcome()
+    rng = random.Random(1)
+    tone = 10 ** (-35 / 20) * math.sqrt(2)  # sine amplitude for -35 dB RMS
+    noise = 10 ** (-65 / 20) * math.sqrt(3)  # uniform noise at -65 dB RMS
+    start = time.time()
+    for i in range(900):  # 9 s: 0.7 s "words", 0.15 s gaps
+        talking = i % 85 < 70
+        c.frame([(tone * math.sin(2 * math.pi * 220 * (c.seq * 480 + n) / 48000) if talking else 0)
+                 + noise * rng.uniform(-1, 1) for n in range(480)])
+        if i % 100 == 0:
+            c.send({"type": "ping", "id": i, "rtt": 3})
+        time.sleep(max(0, start + (i + 1) * 0.01 - time.time()))
+    text = window_text()
+    found = re.search(r"Now ([+-]?\d+) dB", text)
+    c.send({"type": "bye"}); c.close()
+    gain = int(found.group(1)) if found else None
+    return gain is not None and 10 <= gain <= 15, f"automatic gain now {gain} dB (expect ~+12)"
+
+
 TESTS = [t_not_hello, t_garbage, t_wrong_field_type, t_wrong_version, t_wrong_format, t_hello_timeout, t_welcome,
          t_ping, t_audio_and_mute, t_bye_from_phone, t_lost_contact, t_newest_wins, t_long_line,
-         t_disconnect_button, t_switch_button, t_pairing]
+         t_disconnect_button, t_switch_button, t_pairing, t_auto_gain]
 
 if __name__ == "__main__":
     wanted = sys.argv[1:]

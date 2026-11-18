@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # One-time setup of App Store signing for .github/workflows/ios.yml. Runs anywhere with bash,
 # openssl and tar (Git Bash on Windows too). Everything goes into a private folder outside the
-# repo (default ~/phomic-signing): keep it, don't commit it. See README.md, "App Store builds".
+# repo (default ~/phomic-signing): keep it, don't commit it. See docs/development.md, "App Store builds".
 #
 #   bash Tools/app-store-signing.sh csr
 #       Makes a private key and a certificate signing request (request.csr). Upload the CSR at

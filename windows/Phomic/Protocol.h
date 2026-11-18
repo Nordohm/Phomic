@@ -1,6 +1,6 @@
 #pragma once
 
-// Wire protocol shared with the iOS app (see README.md, "Protocol").
+// Wire protocol shared with the iOS app (see docs/protocols.md).
 //
 // Control: TCP, newline-delimited UTF-8 JSON objects, one per line.
 // Audio:   UDP datagrams, little-endian:

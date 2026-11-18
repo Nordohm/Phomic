@@ -8,6 +8,8 @@
 #include "SourceArbiter.h"
 #include "StreamServer.h"
 #include "UsbReceiver.h"
+#include "AutoGain.h"
+#include "Limiter.h"
 #include "TrayIcon.h"
 
 namespace winrt::Phomic::implementation
@@ -59,6 +61,10 @@ namespace winrt::Phomic::implementation
             winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
         void CloseToTrayCheck_Click(winrt::Windows::Foundation::IInspectable const& sender,
             winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
+        void UpdateButton_Click(winrt::Windows::Foundation::IInspectable const& sender,
+            winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
+        void AutoGainToggle_Toggled(winrt::Windows::Foundation::IInspectable const& sender,
+            winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
 
     private:
         enum class MicAction { Setup };
@@ -69,6 +75,9 @@ namespace winrt::Phomic::implementation
         void UpdateMicSetup();
         winrt::fire_and_forget ShowAppStoreBadge();
         winrt::fire_and_forget ShowIPhoneAppCode();
+        winrt::fire_and_forget CheckForUpdate();
+        std::wstring m_updateVersion;   // newer release on GitHub, e.g. "1.2.0" (empty: none)
+        std::wstring m_updateUrl;       // its release page
         double m_badgeScale = 0;        // display scale the App Store badge was drawn for
         void RunMicAction(MicAction action);
         static MicResult RunMicActionBlocking(MicAction action);
@@ -122,6 +131,8 @@ namespace winrt::Phomic::implementation
         enum class UsbAction { None, GetAppleDevices, StartService, OpenAppleDevices, CopyCommand };
         UsbAction m_usbAction = UsbAction::None;
         std::wstring m_usbCommand;      // CopyCommand: what goes on the clipboard
+        std::wstring m_shownUsbButton;  // what the USB row's button says now, and its tooltip
+        std::wstring m_shownUsbTip;
         uint64_t m_usbCopiedTick = 0;
         uint64_t m_usbStartTick = 0;    // StartService clicked: if it doesn't help, offer the window
         bool m_showingAppCode = false;  // WinUI allows one ContentDialog at a time
@@ -147,7 +158,13 @@ namespace winrt::Phomic::implementation
         };
         std::vector<OutputTarget> m_targets;
         std::wstring m_activeTarget;
-        std::atomic<float> m_gain{ 1.f };
+        std::atomic<float> m_gain{ 1.f };          // manual gain (automatic gain off)
+        std::atomic<bool> m_autoGainOn{ true };
+        std::atomic<float> m_appliedGainDb{ 0.f }; // automatic gain's current gain, for the UI
+        // Audio thread only (the output's source, see InitializeComponent):
+        std::unique_ptr<phomic::AutoGain> m_autoGain;
+        phomic::Limiter m_limiter;
+        void UpdateGain(bool live);
         bool m_initialized = false;
         bool m_updatingDevices = false;
 
@@ -163,6 +180,10 @@ namespace winrt::Phomic::implementation
         uint64_t m_lastPackets = 0;
         uint64_t m_lastReceived = 0;
         uint64_t m_lastConcealed = 0;
+        uint64_t m_packetsPerSecond = 0;
+        double m_lossPercent = 0;
+        void MeasureStream(phomic::StreamServer::Status const& wifi, phomic::BluetoothReceiver::Status const& bluetooth,
+            phomic::UsbReceiver::Status const& usb);
 
         // Tray and window size.
         std::unique_ptr<phomic::TrayIcon> m_tray;

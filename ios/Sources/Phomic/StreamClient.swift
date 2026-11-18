@@ -105,14 +105,7 @@ final class StreamClient: @unchecked Sendable {
         guard active.withLock({ $0 }) else { return }
         queue.async {
             guard self.streaming, !self.muted, let audio = self.inline ? self.control : self.audio else { return }
-            var packet = Data(capacity: 12 + frame.count * 2)
-            packet.append(contentsOf: WireProtocol.magic)
-            withUnsafeBytes(of: self.session.littleEndian) { packet.append(contentsOf: $0) }
-            withUnsafeBytes(of: self.sequence.littleEndian) { packet.append(contentsOf: $0) }
-            for sample in frame {
-                let value = Int16(max(-1, min(1, sample)) * 32767)
-                withUnsafeBytes(of: value.littleEndian) { packet.append(contentsOf: $0) }
-            }
+            let packet = WireProtocol.audioPacket(session: self.session, sequence: self.sequence, frame: frame)
             self.sequence &+= 1
             audio.send(content: packet, completion: .idempotent)
         }

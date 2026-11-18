@@ -60,6 +60,12 @@
     <ClInclude Include="JitterBuffer.h">
       <Filter>Engine</Filter>
     </ClInclude>
+    <ClInclude Include="AutoGain.h">
+      <Filter>Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="Limiter.h">
+      <Filter>Engine</Filter>
+    </ClInclude>
     <ClInclude Include="AudioOutput.h">
       <Filter>Engine</Filter>
     </ClInclude>

@@ -13,43 +13,171 @@ enum CaptureError: LocalizedError {
     }
 }
 
-/// Owns the iPhone's audio hardware.
+/// Owns the iPhone's audio hardware, in one of three states:
 ///
-/// * `startCapture`: records the microphone raw (RemoteIO, measurement mode, no app-side
+/// * `capturing`: records the microphone raw (RemoteIO, measurement mode, no app-side
 ///   processing) and emits 10 ms frames of 48 kHz mono Float32 through `onFrame`. Any
 ///   processing comes from the iPhone's own Mic Mode (Standard / Voice Isolation / Wide Spectrum).
-/// * `startKeepAlive`: releases the microphone (no orange indicator) but keeps a silent,
+/// * `keepingAlive`: releases the microphone (no orange indicator) but keeps a silent,
 ///   mixable output running so iOS doesn't suspend the app while it's muted in the background.
+/// * `stopped`.
+///
+/// Switching between them (the audio session and the I/O unit) takes a moment, up to a few
+/// hundred milliseconds, so it runs on a queue of its own: on the main thread it would stall
+/// the UI, the mute button's animation first. Requests run in order, and one that a newer
+/// request replaces before it starts is skipped, so only the latest counts.
 @MainActor
+@Observable
 final class AudioCapture {
-    enum State: Equatable {
+    enum State: Equatable, Sendable {
         case stopped
         case capturing
         case keepingAlive
     }
 
-    var onFrame: (@Sendable ([Float]) -> Void)?
-    /// Peak level (0...1) about 20 times per second.
-    var onLevel: (@Sendable (Float) -> Void)?
+    enum Outcome: Sendable {
+        case done
+        case failed(Error)
+        /// A newer request came in meanwhile; it has the say.
+        case replaced
+    }
 
+    @ObservationIgnored var onFrame: (@Sendable ([Float]) -> Void)?
+    /// Peak level (0...1) about 20 times per second.
+    @ObservationIgnored var onLevel: (@Sendable (Float) -> Void)?
+
+    /// Where the hardware is, as of the last request that finished.
     private(set) var state: State = .stopped
-    private(set) var startedAt = Date.distantPast
-    private(set) var hardwareSampleRate: Double = 0
+    /// What the latest request asked for (the state it's in, or on its way to).
+    @ObservationIgnored private(set) var wanted: State = .stopped
+    @ObservationIgnored private(set) var startedAt = Date.distantPast
+    @ObservationIgnored private(set) var hardwareSampleRate: Double = 0
 
     var isCapturing: Bool {
         if case .capturing = state { return true }
         return false
     }
 
+    private let hardware = AudioHardware()
+    private let queue = DispatchQueue(label: "Phomic audio", qos: .userInitiated)
+    @ObservationIgnored private var requests = 0
+    private let newestRequest = OSAllocatedUnfairLock(initialState: 0)
+    @ObservationIgnored private var shownSerial = 0
+    @ObservationIgnored private var unfinished = 0
+    @ObservationIgnored private var waitingForIdle: [CheckedContinuation<Void, Never>] = []
+
+    /// Moves the hardware to `target`; `restart` starts it again even if it's there already.
+    /// `fromBackground`: see AudioHardware.startCapture. Returns at once; `then` runs on the main
+    /// actor once the switch is done.
+    func set(_ target: State, restart: Bool = false, fromBackground: Bool = false,
+             then: (@MainActor @Sendable (Outcome) -> Void)? = nil) {
+        requests += 1
+        unfinished += 1
+        let request = requests
+        wanted = target
+        newestRequest.withLock { $0 = request }
+        let hardware = self.hardware
+        let newest = self.newestRequest
+        let onFrame = self.onFrame ?? { _ in }
+        let onLevel = self.onLevel ?? { _ in }
+        queue.async { [weak self] in
+            var result: Result<Void, Error>?
+            if newest.withLock({ $0 }) == request {
+                result = Result {
+                    try hardware.move(to: target, restart: restart, fromBackground: fromBackground,
+                                      onFrame: onFrame, onLevel: onLevel)
+                }
+            }
+            let finished = result
+            let snapshot = hardware.snapshot()
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    self?.finish(request, finished, snapshot, then: then)
+                }
+            }
+        }
+    }
+
+    /// Returns once every request made so far is done.
+    func idle() async {
+        guard unfinished > 0 else { return }
+        await withCheckedContinuation { waitingForIdle.append($0) }
+    }
+
+    /// `result` is nil for a request that was skipped.
+    private func finish(_ request: Int, _ result: Result<Void, Error>?, _ snapshot: AudioHardware.Snapshot,
+                        then: (@MainActor @Sendable (Outcome) -> Void)?) {
+        if snapshot.serial > shownSerial {
+            shownSerial = snapshot.serial
+            state = snapshot.state
+            startedAt = snapshot.startedAt
+            hardwareSampleRate = snapshot.sampleRate
+        }
+        let outcome: Outcome
+        switch result {
+        case .some(.success) where request == requests:
+            outcome = .done
+        case .some(.failure(let error)) where request == requests:
+            wanted = state
+            outcome = .failed(error)
+        default:
+            outcome = .replaced
+        }
+        then?(outcome)
+        unfinished -= 1
+        if unfinished == 0 {
+            let waiting = waitingForIdle
+            waitingForIdle = []
+            waiting.forEach { $0.resume() }
+        }
+    }
+}
+
+/// The audio session and I/O unit behind AudioCapture. Used on AudioCapture's queue only.
+private final class AudioHardware: @unchecked Sendable {
+    struct Snapshot: Sendable {
+        var serial: Int
+        var state: AudioCapture.State
+        var startedAt: Date
+        var sampleRate: Double
+    }
+
+    private var state: AudioCapture.State = .stopped
+    private var startedAt = Date.distantPast
+    private var hardwareSampleRate: Double = 0
+    /// Counts changes, so the main actor can tell an old snapshot from a newer one.
+    private var serial = 0
+
     private let ring = SampleRing(capacity: 1 << 16)
     private let wake = DispatchSemaphore(value: 0)
     private var io: AudioUnitIO?
     private var pump: FramePump?
 
+    func snapshot() -> Snapshot {
+        Snapshot(serial: serial, state: state, startedAt: startedAt, sampleRate: hardwareSampleRate)
+    }
+
+    func move(to target: AudioCapture.State, restart: Bool, fromBackground: Bool,
+              onFrame: @escaping @Sendable ([Float]) -> Void,
+              onLevel: @escaping @Sendable (Float) -> Void) throws {
+        guard target != state || restart else { return }
+        defer { serial += 1 }
+        switch target {
+        case .capturing:
+            try startCapture(fromBackground: fromBackground, onFrame: onFrame, onLevel: onLevel)
+        case .keepingAlive:
+            try startKeepAlive()
+        case .stopped:
+            stop()
+        }
+    }
+
     /// `fromBackground`: iOS only lets a background app activate an audio session that mixes
     /// with other audio (error '!int' otherwise), so then use play-and-record with mixing
     /// (still raw, measurement mode).
-    func startCapture(fromBackground: Bool = false) throws {
+    private func startCapture(fromBackground: Bool,
+                              onFrame: @escaping @Sendable ([Float]) -> Void,
+                              onLevel: @escaping @Sendable (Float) -> Void) throws {
         // Close the current session first: switching an active session's category in the
         // background makes iOS treat the new one as interrupting others.
         stop()
@@ -78,8 +206,8 @@ final class AudioCapture {
             ring: ring,
             wake: wake,
             inputRate: rate,
-            onFrame: onFrame ?? { _ in },
-            onLevel: onLevel ?? { _ in }
+            onFrame: onFrame,
+            onLevel: onLevel
         )
         let thread = Thread { pump.run() }
         thread.name = "Phomic audio pump"
@@ -93,7 +221,7 @@ final class AudioCapture {
         startedAt = Date()
     }
 
-    func startKeepAlive() throws {
+    private func startKeepAlive() throws {
         stop() // close the (possibly non-mixable) recording session first, see startCapture
         let session = AVAudioSession.sharedInstance()
         try session.setCategory(.playback, mode: .default, options: [.mixWithOthers])
@@ -105,7 +233,7 @@ final class AudioCapture {
         startedAt = Date()
     }
 
-    func stop() {
+    private func stop() {
         let wasActive = state != .stopped
         stopIO()
         if wasActive {
@@ -125,7 +253,7 @@ final class AudioCapture {
 
 // MARK: - Core Audio I/O unit
 
-/// Wraps one RemoteIO / VoiceProcessingIO audio unit. Created on the main actor,
+/// Wraps one RemoteIO / VoiceProcessingIO audio unit. Created on AudioCapture's queue,
 /// but its render callbacks run on Core Audio's real-time thread.
 final class AudioUnitIO: @unchecked Sendable {
     private let ring: SampleRing

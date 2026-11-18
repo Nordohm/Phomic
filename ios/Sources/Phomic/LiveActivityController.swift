@@ -1,6 +1,8 @@
 import ActivityKit
 import Foundation
 import PhomicActivity
+import UIKit
+import os
 
 /// Starts, updates and ends Phomic's Live Activity (see MicActivityAttributes).
 ///
@@ -9,54 +11,82 @@ import PhomicActivity
 /// (or was declined) is tried again with the next change while the app is open.
 ///
 /// It must not outlive the app: when Phomic is swiped away in the app switcher it ends the
-/// activity on the way out (endBeforeExit). If Phomic dies without a chance to (a crash, or
-/// iOS reclaiming memory), the activity goes stale a few minutes later, because Phomic renews
-/// its stale date only while it runs, and the widget then shows that Phomic stopped.
+/// activity on the way out (endBeforeExit), and one left over from a crash goes at the next
+/// launch.
+///
+/// It has no stale date. Phomic used to renew one every minute, so an activity whose app had
+/// died would show that; but iOS rations updates from apps in the background and drops the rest
+/// without a word, so a running Phomic's activity went stale too, and showed "Phomic stopped"
+/// until Phomic came on screen.
+///
+/// Every step goes to the log (category LiveActivity; read it with the iPhone plugged in,
+/// `idevicesyslog -p Phomic`), along with the app going to and from the background.
 @MainActor
 final class LiveActivityController {
     typealias State = MicActivityAttributes.ContentState
 
     private var activity: Activity<MicActivityAttributes>?
     private var shown: State?
-    private var renewal: Task<Void, Never>?
+    private var watch: Task<Void, Never>?
+    private var observers: [NSObjectProtocol] = []
 
-    /// How long an activity counts as current without hearing from Phomic, and how often a
-    /// running Phomic says it still is.
-    nonisolated private static let staleAfter: TimeInterval = 180
-    private static let renewEvery: Duration = .seconds(60)
+    nonisolated private static let log = Logger(subsystem: "io.github.nordohm.Phomic", category: "LiveActivity")
 
     /// ActivityKit's Activity is thread-safe but not marked Sendable.
     private struct Handle: @unchecked Sendable {
         let activity: Activity<MicActivityAttributes>
         func update(_ state: State) {
             let content = LiveActivityController.content(state)
-            Task.detached { await activity.update(content) }
+            Task.detached {
+                await activity.update(content)
+                LiveActivityController.log.notice(
+                    "changed: \(state.status.rawValue, privacy: .public), activity \(String(describing: activity.activityState), privacy: .public)")
+            }
         }
-        func end() {
-            Task.detached { await activity.end(nil, dismissalPolicy: .immediate) }
+        func end(why: String) {
+            Task.detached {
+                await activity.end(nil, dismissalPolicy: .immediate)
+                LiveActivityController.log.notice("ended (\(why, privacy: .public))")
+            }
         }
     }
 
     init() {
         // A run that was killed can leave one behind.
-        for stale in Activity<MicActivityAttributes>.activities {
-            Handle(activity: stale).end()
+        let leftover = Activity<MicActivityAttributes>.activities
+        if !leftover.isEmpty {
+            Self.log.notice("ending \(leftover.count) left from an earlier run")
+        }
+        for stale in leftover {
+            Handle(activity: stale).end(why: "left from an earlier run")
+        }
+        let center = NotificationCenter.default
+        let moments: [(Notification.Name, String)] = [
+            (UIApplication.didEnterBackgroundNotification, "app in the background"),
+            (UIApplication.willEnterForegroundNotification, "app coming back"),
+            (UIApplication.didBecomeActiveNotification, "app active"),
+            (UIApplication.didReceiveMemoryWarningNotification, "memory warning"),
+        ]
+        for (name, text) in moments {
+            observers.append(center.addObserver(forName: name, object: nil, queue: .main) { _ in
+                Self.log.notice("\(text, privacy: .public)")
+            })
         }
     }
 
     nonisolated private static func content(_ state: State) -> ActivityContent<State> {
-        ActivityContent(state: state, staleDate: Date().addingTimeInterval(staleAfter))
+        ActivityContent(state: state, staleDate: nil)
     }
 
     /// `nil` ends the activity.
     func show(_ state: State?) {
         guard let state else {
             shown = nil
-            renewal?.cancel()
-            renewal = nil
+            watch?.cancel()
+            watch = nil
             if let activity {
                 self.activity = nil
-                Handle(activity: activity).end()
+                Handle(activity: activity).end(why: "session over")
             }
             return
         }
@@ -64,12 +94,20 @@ final class LiveActivityController {
         if let activity {
             shown = state
             Handle(activity: activity).update(state)
-        } else if state.status != .reconnecting, ActivityAuthorizationInfo().areActivitiesEnabled {
+        } else if state.status != .reconnecting {
             // Start only once actually live; keep it through reconnects after that.
-            activity = try? Activity.request(attributes: MicActivityAttributes(), content: Self.content(state))
-            shown = activity == nil ? nil : state
-            if activity != nil {
-                startRenewing()
+            guard ActivityAuthorizationInfo().areActivitiesEnabled else {
+                Self.log.notice("not started: Live Activities are off for Phomic")
+                return
+            }
+            do {
+                let started = try Activity.request(attributes: MicActivityAttributes(), content: Self.content(state))
+                activity = started
+                shown = state
+                Self.log.notice("started: \(state.status.rawValue, privacy: .public)")
+                watchState(of: started)
+            } catch {
+                Self.log.error("not started: \(error.localizedDescription, privacy: .public)")
             }
         }
     }
@@ -78,8 +116,9 @@ final class LiveActivityController {
     /// process goes, or it would stay on the lock screen. iOS gives the app a moment for this,
     /// so this waits for ActivityKit, up to two seconds.
     func endBeforeExit() {
-        renewal?.cancel()
-        renewal = nil
+        Self.log.notice("app closing")
+        watch?.cancel()
+        watch = nil
         activity = nil
         shown = nil
         let handles = Activity<MicActivityAttributes>.activities.map(Handle.init)
@@ -94,13 +133,13 @@ final class LiveActivityController {
         _ = done.wait(timeout: .now() + 2)
     }
 
-    private func startRenewing() {
-        renewal?.cancel()
-        renewal = Task { [weak self] in
-            while !Task.isCancelled {
-                try? await Task.sleep(for: Self.renewEvery)
-                guard !Task.isCancelled, let self, let activity = self.activity, let shown = self.shown else { return }
-                Handle(activity: activity).update(shown)
+    /// Logs what iOS does with the activity: it being ended or dismissed by someone else.
+    private func watchState(of activity: Activity<MicActivityAttributes>) {
+        watch?.cancel()
+        let handle = Handle(activity: activity)
+        watch = Task.detached {
+            for await state in handle.activity.activityStateUpdates {
+                Self.log.notice("iOS says the activity is \(String(describing: state), privacy: .public)")
             }
         }
     }

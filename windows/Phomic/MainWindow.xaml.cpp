@@ -12,6 +12,8 @@
 #include "CableOutput.h"
 #include "Pairing.h"
 #include "AppleUsb.h"
+#include "AutoGain.h"
+#include "Limiter.h"
 
 #include <shellapi.h>
 #include <winrt/Windows.ApplicationModel.DataTransfer.h>
@@ -31,6 +33,11 @@ namespace
     // needs at least the "Balanced" cushion.
     constexpr uint32_t kMinBluetoothFrames = 6;
     constexpr int kTicksPerSecond = 20; // UI timer runs at 50 ms
+    constexpr double kWindowWidth = 600; // client area, in epx: fixed, only the height changes
+    constexpr int kMinGainDb = -12, kMaxGainDb = 30; // the Gain slider's range
+    // Where automatic gain starts the first time. The iPhone's raw microphone is quiet: talking
+    // at arm's length peaks around -30 to -20 dBFS. After that it starts where it was last.
+    constexpr int kAutoGainStartDb = 18;
     // Output target meaning "write straight into VB-CABLE" (see CableOutput).
     constexpr wchar_t kCableTarget[] = L"phomic:cable";
 
@@ -39,12 +46,51 @@ namespace
         return static_cast<float>(std::pow(10.0, db / 20.0));
     }
 
+    std::wstring GainHeader(int db)
+    {
+        return db == 0 ? std::wstring(L"Gain (0 dB)") : std::format(L"Gain ({:+d} dB)", db);
+    }
+
     // A closed InfoBar keeps a zero-height slot that still gets the StackPanel's spacing,
     // so hidden banners are also collapsed.
     void ShowBar(InfoBar const& bar, bool open)
     {
         bar.IsOpen(open);
         bar.Visibility(open ? Visibility::Visible : Visibility::Collapsed);
+    }
+
+    // "v1.2.0" (a release tag) or "1.2.0" as numbers; nothing if it isn't a version.
+    std::optional<std::array<int, 3>> ParseVersion(std::wstring_view text)
+    {
+        if (!text.empty() && (text.front() == L'v' || text.front() == L'V'))
+        {
+            text.remove_prefix(1);
+        }
+        std::array<int, 3> parts{};
+        size_t index = 0;
+        int value = -1;
+        for (const wchar_t c : text)
+        {
+            if (c >= L'0' && c <= L'9' && value < 10000)
+            {
+                value = std::max(value, 0) * 10 + (c - L'0');
+            }
+            else if (c == L'.' && value >= 0 && index < parts.size() - 1)
+            {
+                parts[index++] = value;
+                value = -1;
+            }
+            else
+            {
+                return std::nullopt;
+            }
+        }
+        if (value < 0)
+        {
+            return std::nullopt;
+        }
+        parts[index] = value;
+        return parts;
     }
 
     std::wstring Lower(std::wstring s)
@@ -80,7 +126,12 @@ namespace winrt::Phomic::implementation
 
         namespace settings = phomic::settings;
         m_bufferPreset = std::clamp(settings::GetInt(settings::kBufferMode, kDefaultBufferPreset), 0, kBufferChoices - 1);
-        const int gainDb = std::clamp(settings::GetInt(settings::kGainDb, 0), -12, 24);
+        const int gainDb = std::clamp(settings::GetInt(settings::kManualGainDb, 0), kMinGainDb, kMaxGainDb);
+        m_autoGainOn = settings::GetInt(settings::kAutoGain, 1) != 0;
+        const int autoStartDb = std::clamp(settings::GetInt(settings::kAutoGainDb, kAutoGainStartDb),
+                                           static_cast<int>(phomic::AutoGain::kMinDb), static_cast<int>(phomic::AutoGain::kMaxDb));
+        m_autoGain = std::make_unique<phomic::AutoGain>(static_cast<float>(autoStartDb));
+        m_appliedGainDb = static_cast<float>(autoStartDb);
         const bool bluetoothEnabled = settings::GetInt(settings::kBluetooth, 1) != 0;
         m_wifiEnabled = settings::GetInt(settings::kWiFi, 1) != 0;
         const bool usbEnabled = settings::GetInt(settings::kUsb, 1) != 0;
@@ -89,13 +140,19 @@ namespace winrt::Phomic::implementation
         m_gain = DbToGain(gainDb);
         ApplyBufferTarget();
 
+        // On the output's audio thread. Both outputs share it, but only one of them runs at a time.
         auto source = [this](float* out, uint32_t frames)
         {
             m_jitter->Read(out, frames);
-            const float gain = m_gain.load(std::memory_order_relaxed);
-            for (uint32_t i = 0; i < frames; ++i)
+            if (m_autoGainOn.load(std::memory_order_relaxed))
             {
-                out[i] = std::clamp(out[i] * gain, -1.f, 1.f);
+                m_autoGain->Process(out, frames);
+                m_appliedGainDb.store(m_autoGain->GainDb(), std::memory_order_relaxed);
+                m_limiter.Process(out, frames, 1.f);
+            }
+            else
+            {
+                m_limiter.Process(out, frames, m_gain.load(std::memory_order_relaxed));
             }
         };
         m_output = std::make_unique<phomic::AudioOutput>(source);
@@ -108,8 +165,14 @@ namespace winrt::Phomic::implementation
         m_watcher = std::make_unique<phomic::DeviceWatcher>();
 
         BufferCombo().SelectedIndex(m_bufferPreset);
+        GainSlider().Minimum(kMinGainDb);
+        GainSlider().Maximum(kMaxGainDb);
         GainSlider().Value(gainDb);
-        GainSlider().Header(box_value(hstring(std::format(L"Gain ({:+d} dB)", gainDb))));
+        GainSlider().Header(box_value(hstring(GainHeader(gainDb))));
+        GainMinText().Text(std::format(L"{:+d} dB", kMinGainDb));
+        GainMaxText().Text(std::format(L"{:+d} dB", kMaxGainDb));
+        AutoGainToggle().IsOn(m_autoGainOn);
+        UpdateGain(false);
         BluetoothToggle().IsOn(bluetoothEnabled);
         WiFiToggle().IsOn(m_wifiEnabled);
         UsbToggle().IsOn(usbEnabled);
@@ -143,6 +206,15 @@ namespace winrt::Phomic::implementation
         {
             bar.Closed([](InfoBar const& sender, auto&&) { sender.Visibility(Visibility::Collapsed); });
         }
+        // Closed: not again for this version, only for the next one.
+        UpdateBar().Closed([weak = get_weak()](InfoBar const& sender, auto&&)
+        {
+            sender.Visibility(Visibility::Collapsed);
+            if (auto self = weak.get())
+            {
+                phomic::settings::SetString(phomic::settings::kSkippedUpdate, self->m_updateVersion);
+            }
+        });
 
         FooterText().Text(L"Phomic " PHOMIC_VERSION_STRING L" is free and open source.");
         ShowAppStoreBadge();
@@ -160,7 +232,6 @@ namespace winrt::Phomic::implementation
         const auto usb = m_usb->GetStatus();
         UpdateConnection(wifi, bluetooth, usb);
         UpdateTransports(wifi, bluetooth, usb);
-        UpdateDetails(wifi, bluetooth, usb);
     }
 
     void MainWindow::StartWiFi()
@@ -218,6 +289,11 @@ namespace winrt::Phomic::implementation
         {
             m_cableOutput->Stop();
         }
+        if (m_autoGain)
+        {
+            // Automatic gain starts from here next time.
+            phomic::settings::SetInt(phomic::settings::kAutoGainDb, static_cast<int>(std::lround(m_appliedGainDb.load())));
+        }
     }
 
     HWND MainWindow::WindowHandle()
@@ -232,17 +308,16 @@ namespace winrt::Phomic::implementation
     {
         const HWND hwnd = WindowHandle();
         const double scale = (hwnd ? GetDpiForWindow(hwnd) : 96) / 96.0;
-        // Full width (FitToContent allows no wider). The height is a first guess: FitToContent
-        // sets it once the content is laid out.
-        AppWindow().ResizeClient({ static_cast<int32_t>(680 * scale), static_cast<int32_t>(800 * scale) });
-        // The content is at most 620 wide and centered. (Stretch + MaxWidth would center it by
-        // its desired width, which pushes it sideways when nothing in it is that wide.)
+        // The height is a first guess: FitToContent sets it once the content is laid out.
+        AppWindow().ResizeClient({ static_cast<int32_t>(kWindowWidth * scale), static_cast<int32_t>(800 * scale) });
+        // The content fills the width between the margins. (Stretch would center it by its
+        // desired width, which pushes it sideways when nothing in it is that wide.)
         RootScroller().SizeChanged([weak = get_weak()](auto&&, SizeChangedEventArgs const& args)
         {
             if (auto self = weak.get())
             {
                 const double margins = 24 + 24;
-                self->RootPanel().Width(std::clamp(args.NewSize().Width - margins, 0.0, 620.0));
+                self->RootPanel().Width(std::max(args.NewSize().Width - margins, 0.0));
             }
         });
         // After each layout pass: how tall does the content want to be? (Its actual height
@@ -291,14 +366,15 @@ namespace winrt::Phomic::implementation
         const int32_t frameHeight = window.Size().Height - client.Height; // title bar and border
         needed = std::min(needed, area.Height - frameHeight);
 
-        // Size limits (outer window size, physical pixels). Too narrow and the text wraps
-        // awkwardly; wider than the content's maximum width is just empty space.
+        // Size limits (outer window size, physical pixels): a fixed width, a height up to the
+        // content's.
         if (auto presenter = window.Presenter().try_as<windowing::OverlappedPresenter>())
         {
-            constexpr double kMinWidth = 440, kMaxWidth = 680, kMinHeight = 360; // client area, in epx
+            constexpr double kMinHeight = 360; // client area, in epx
+            const int32_t width = static_cast<int32_t>(std::lround(kWindowWidth * scale)) + frameWidth;
             presenter.IsMaximizable(false);
-            presenter.PreferredMinimumWidth(static_cast<int32_t>(std::lround(kMinWidth * scale)) + frameWidth);
-            presenter.PreferredMaximumWidth(static_cast<int32_t>(std::lround(kMaxWidth * scale)) + frameWidth);
+            presenter.PreferredMinimumWidth(width);
+            presenter.PreferredMaximumWidth(width);
             presenter.PreferredMinimumHeight(std::min(static_cast<int32_t>(std::lround(kMinHeight * scale)), needed) + frameHeight);
             presenter.PreferredMaximumHeight(needed + frameHeight);
         }
@@ -761,6 +837,82 @@ namespace winrt::Phomic::implementation
         }
     }
 
+    // ---------------------------------------------------------------- updates
+
+    // Asks GitHub for the latest release of Phomic, and shows UpdateBar if it's newer than this
+    // one. The request names only Phomic and its version. Offline, or GitHub says no: nothing
+    // happens, and the next check tries again. PHOMIC_UPDATE_URL points it elsewhere (tests).
+    winrt::fire_and_forget MainWindow::CheckForUpdate()
+    {
+        auto weak = get_weak();
+        std::wstring source = L"https://api.github.com/repos/Nordohm/Phomic/releases/latest";
+        wchar_t custom[512]{};
+        const DWORD length = GetEnvironmentVariableW(L"PHOMIC_UPDATE_URL", custom, ARRAYSIZE(custom));
+        if (length > 0 && length < ARRAYSIZE(custom))
+        {
+            source = custom;
+        }
+
+        std::wstring tag, page, installer;
+        try
+        {
+            namespace http = winrt::Windows::Web::Http;
+            http::Filters::HttpBaseProtocolFilter filter; // always ask, never an old cached answer
+            filter.CacheControl().ReadBehavior(http::Filters::HttpCacheReadBehavior::NoCache);
+            http::HttpClient client(filter);
+            client.DefaultRequestHeaders().UserAgent().TryParseAdd(L"Phomic/" PHOMIC_VERSION_STRING);
+            client.DefaultRequestHeaders().Accept().TryParseAdd(L"application/vnd.github+json");
+            const auto body = co_await client.GetStringAsync(winrt::Windows::Foundation::Uri(source));
+            const auto release = winrt::Windows::Data::Json::JsonObject::Parse(body);
+            tag = release.GetNamedString(L"tag_name", L"");
+            page = release.GetNamedString(L"html_url", L"");
+            const auto assets = release.GetNamedArray(L"assets", winrt::Windows::Data::Json::JsonArray());
+            for (uint32_t i = 0; i < assets.Size(); ++i)
+            {
+                const auto asset = assets.GetObjectAt(i);
+                const std::wstring name{ asset.GetNamedString(L"name", L"") };
+                if (name.starts_with(L"Phomic-Setup-") && name.ends_with(L".exe"))
+                {
+                    installer = asset.GetNamedString(L"browser_download_url", L"");
+                }
+            }
+        }
+        catch (...)
+        {
+            co_return;
+        }
+
+        auto self = weak.get();
+        const auto latest = ParseVersion(tag);
+        if (!self || !latest)
+        {
+            co_return;
+        }
+        const std::array<int, 3> current{ PHOMIC_VERSION_MAJOR, PHOMIC_VERSION_MINOR, PHOMIC_VERSION_PATCH };
+        const std::wstring version = std::format(L"{}.{}.{}", (*latest)[0], (*latest)[1], (*latest)[2]);
+        // Only ever open Phomic's own release files and pages, whatever the reply says.
+        constexpr std::wstring_view kReleases = L"https://github.com/Nordohm/Phomic/releases/";
+        const std::wstring url = installer.starts_with(kReleases) ? installer
+                               : page.starts_with(kReleases) ? page
+                               : std::wstring(kReleases);
+        if (*latest <= current || version == phomic::settings::GetString(phomic::settings::kSkippedUpdate))
+        {
+            co_return;
+        }
+        self->m_updateVersion = version;
+        self->m_updateUrl = url;
+        self->UpdateBar().Title(std::format(L"Phomic {} is available", version));
+        ShowBar(self->UpdateBar(), true);
+    }
+
+    void MainWindow::UpdateButton_Click(winrt::Windows::Foundation::IInspectable const&, RoutedEventArgs const&)
+    {
+        if (!m_updateUrl.empty())
+        {
+            ShellExecuteW(nullptr, L"open", m_updateUrl.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+        }
+    }
+
     void MainWindow::GetIPhoneAppLink_Click(winrt::Windows::Foundation::IInspectable const&, RoutedEventArgs const&)
     {
         ShowIPhoneAppCode();
@@ -807,6 +959,13 @@ namespace winrt::Phomic::implementation
     {
         ++m_tick;
 
+        // A newer version? Shortly after starting, then twice a day: Phomic can sit in the tray
+        // for weeks.
+        if (m_tick % (12 * 3600 * kTicksPerSecond) == 15 * kTicksPerSecond)
+        {
+            CheckForUpdate();
+        }
+
         if (m_watcher->TakeChanged())
         {
             RefreshDevices();
@@ -834,13 +993,16 @@ namespace winrt::Phomic::implementation
         const auto usb = m_usb->GetStatus();
         const bool live = wifi.connected || bluetooth.connected || usb.connected;
 
-        // Level meter: post-gain peak in dBFS, fast attack, slow release.
-        float peak = std::max({ m_server->TakePeak(), m_bluetooth->TakePeak(), m_usb->TakePeak() }) * m_gain.load();
+        // Level meter: post-gain peak in dBFS (the limiter keeps it under its ceiling), fast
+        // attack, slow release. "Clipping": the iPhone's own input is at full scale.
+        float received = std::max({ m_server->TakePeak(), m_bluetooth->TakePeak(), m_usb->TakePeak() });
         if (!live)
         {
-            peak = 0.f;
+            received = 0.f;
         }
-        const float db = peak > 1e-5f ? 20.f * std::log10(std::min(peak, 1.f)) : -100.f;
+        const float gained = received * (m_autoGainOn ? DbToGain(m_appliedGainDb.load()) : m_gain.load());
+        const float peak = std::min(gained, phomic::Limiter::kCeiling);
+        const float db = peak > 1e-5f ? 20.f * std::log10(peak) : -100.f;
         const float target = std::clamp((db + 60.f) / 60.f, 0.f, 1.f);
         m_meter = target > m_meter ? target : std::max(target, m_meter - 0.03f);
         LevelScale().ScaleX(m_meter);
@@ -848,7 +1010,9 @@ namespace winrt::Phomic::implementation
         {
             LevelText().Text(!live ? std::wstring()
                 : db <= -60.f ? std::wstring(L"silent")
-                : std::format(L"{:.0f} dB{}", db, peak >= 0.99f ? L" · clipping" : L""));
+                : std::format(L"{:.0f} dB{}", db, received >= 0.99f ? L" · clipping"
+                                                : gained > phomic::Limiter::kCeiling ? L" · limiting" : L""));
+            UpdateGain(live);
         }
 
         UpdateConnection(wifi, bluetooth, usb);
@@ -858,8 +1022,28 @@ namespace winrt::Phomic::implementation
         }
         if (m_tick % kTicksPerSecond == 0)
         {
-            UpdateDetails(wifi, bluetooth, usb);
+            MeasureStream(wifi, bluetooth, usb);
+            // Building the rows (and looking up this PC's addresses) only while they're on screen.
+            if (DetailsPanel().Visibility() == Visibility::Visible && AppWindow().IsVisible())
+            {
+                UpdateDetails(wifi, bluetooth, usb);
+            }
         }
+    }
+
+    // Packets and loss over the last second, for Show details.
+    void MainWindow::MeasureStream(phomic::StreamServer::Status const& wifi, phomic::BluetoothReceiver::Status const& bluetooth,
+        phomic::UsbReceiver::Status const& usb)
+    {
+        const uint64_t totalPackets = wifi.connected ? wifi.packets : usb.connected ? usb.packets : bluetooth.packets;
+        const auto stats = m_jitter->GetStats();
+        const uint64_t received = stats.received >= m_lastReceived ? stats.received - m_lastReceived : stats.received;
+        const uint64_t concealed = stats.concealed >= m_lastConcealed ? stats.concealed - m_lastConcealed : stats.concealed;
+        m_packetsPerSecond = totalPackets >= m_lastPackets ? totalPackets - m_lastPackets : totalPackets;
+        m_lossPercent = (received + concealed) > 0 ? 100.0 * concealed / static_cast<double>(received + concealed) : 0.0;
+        m_lastPackets = totalPackets;
+        m_lastReceived = stats.received;
+        m_lastConcealed = stats.concealed;
     }
 
     // Each transport keeps the reason its own last session ended; the status card shows the
@@ -1153,17 +1337,22 @@ namespace winrt::Phomic::implementation
         m_usbAction = usbAction;
         m_usbCommand = usbCommand;
         const bool copied = m_usbCopiedTick != 0 && m_tick - m_usbCopiedTick < 3 * kTicksPerSecond;
-        UsbActionButton().Content(box_value(
-            usbAction == UsbAction::GetAppleDevices ? L"Get Apple Devices"
+        const std::wstring buttonText = usbAction == UsbAction::GetAppleDevices ? L"Get Apple Devices"
             : usbAction == UsbAction::StartService ? L"Start it"
             : usbAction == UsbAction::OpenAppleDevices ? L"Open Apple Devices"
-            : copied ? L"Copied" : L"Copy command"));
-        ToolTipService::SetToolTip(UsbActionButton(), box_value(
-            usbAction == UsbAction::GetAppleDevices ? std::wstring(L"Free, from Apple, in the Microsoft Store")
-            : usbAction == UsbAction::CopyCommand ? usbCommand : std::wstring(L"Starts Apple's USB service")));
+            : copied ? L"Copied" : L"Copy command";
+        const std::wstring buttonTip = usbAction == UsbAction::GetAppleDevices ? std::wstring(L"Free, from Apple, in the Microsoft Store")
+            : usbAction == UsbAction::CopyCommand ? usbCommand : std::wstring(L"Starts Apple's USB service");
+        if (buttonText != m_shownUsbButton || buttonTip != m_shownUsbTip)
+        {
+            m_shownUsbButton = buttonText;
+            m_shownUsbTip = buttonTip;
+            UsbActionButton().Content(box_value(buttonText));
+            ToolTipService::SetToolTip(UsbActionButton(), box_value(buttonTip));
+        }
         UsbActionButton().Visibility(usbAction != UsbAction::None ? Visibility::Visible : Visibility::Collapsed);
 
-        // "Switch here" on the transports that aren't in use, if they can take over.
+        // "Switch" on the transports that aren't in use, if they can take over.
         const bool switching = m_switchRequestedTick != 0 && m_tick - m_switchRequestedTick < 4 * kTicksPerSecond;
         const bool canSwitchToBluetooth = (wifi.connected || usb.connected) && bluetooth.supported && bluetooth.enabled;
         const bool canSwitchToWiFi = (bluetooth.connected || usb.connected) && m_wifiEnabled && wifi.listening;
@@ -1179,14 +1368,7 @@ namespace winrt::Phomic::implementation
     void MainWindow::UpdateDetails(phomic::StreamServer::Status const& wifi, phomic::BluetoothReceiver::Status const& bluetooth,
         phomic::UsbReceiver::Status const& usb)
     {
-        const uint64_t totalPackets = wifi.connected ? wifi.packets : usb.connected ? usb.packets : bluetooth.packets;
         const auto stats = m_jitter->GetStats();
-        const uint64_t packets = totalPackets >= m_lastPackets ? totalPackets - m_lastPackets : totalPackets;
-        const uint64_t received = stats.received >= m_lastReceived ? stats.received - m_lastReceived : stats.received;
-        const uint64_t concealed = stats.concealed >= m_lastConcealed ? stats.concealed - m_lastConcealed : stats.concealed;
-        m_lastPackets = totalPackets;
-        m_lastReceived = stats.received;
-        m_lastConcealed = stats.concealed;
 
         // Stream: only while an iPhone is connected.
         const bool live = wifi.connected || bluetooth.connected || usb.connected;
@@ -1224,7 +1406,6 @@ namespace winrt::Phomic::implementation
                     ? std::format(L"{}, {} kHz", bluetooth.codec, bluetooth.sampleRate / 1000)
                     : std::wstring(L"Waiting for audio");
             }
-            const double loss = (received + concealed) > 0 ? 100.0 * concealed / static_cast<double>(received + concealed) : 0.0;
             std::wstring interruptions = L"None";
             if (stats.underruns || stats.skips)
             {
@@ -1234,7 +1415,7 @@ namespace winrt::Phomic::implementation
             SetDetailRows(StreamGrid(), {
                 { L"Connection", link },
                 { L"Audio", audio },
-                { L"Packets", std::format(L"{} per second · {:.1f} % lost", packets, loss) },
+                { L"Packets", std::format(L"{} per second · {:.1f} % lost", m_packetsPerSecond, m_lossPercent) },
                 { L"Buffer", std::format(L"{:.0f} ms{}", stats.depthMs, stats.automatic ? L" (Auto)" : L"") },
                 { L"Interruptions", interruptions },
             });
@@ -1339,15 +1520,15 @@ namespace winrt::Phomic::implementation
     void MainWindow::GainSlider_ValueChanged(winrt::Windows::Foundation::IInspectable const& sender,
         Primitives::RangeBaseValueChangedEventArgs const& args)
     {
-        const double db = args.NewValue();
+        const int db = static_cast<int>(std::lround(args.NewValue()));
         m_gain = DbToGain(db);
         if (auto slider = sender.try_as<Slider>())
         {
-            slider.Header(box_value(hstring(std::format(L"Gain ({:+.0f} dB)", db))));
+            slider.Header(box_value(hstring(GainHeader(db))));
         }
         if (m_initialized)
         {
-            phomic::settings::SetInt(phomic::settings::kGainDb, static_cast<int>(std::lround(db)));
+            phomic::settings::SetInt(phomic::settings::kManualGainDb, db);
         }
     }
 
@@ -1380,6 +1561,35 @@ namespace winrt::Phomic::implementation
         m_bufferPreset = index;
         ApplyBufferTarget();
         phomic::settings::SetInt(phomic::settings::kBufferMode, index);
+    }
+
+    void MainWindow::AutoGainToggle_Toggled(winrt::Windows::Foundation::IInspectable const&, RoutedEventArgs const&)
+    {
+        if (!m_initialized)
+        {
+            return;
+        }
+        m_autoGainOn = AutoGainToggle().IsOn();
+        phomic::settings::SetInt(phomic::settings::kAutoGain, m_autoGainOn ? 1 : 0);
+        UpdateGain(false);
+    }
+
+    // Automatic gain on: where it is now (while live). Off: the slider to set it by hand.
+    void MainWindow::UpdateGain(bool live)
+    {
+        const bool automatic = m_autoGainOn.load();
+        ManualGainPanel().Visibility(automatic ? Visibility::Collapsed : Visibility::Visible);
+        std::wstring text;
+        if (automatic && live)
+        {
+            const int db = static_cast<int>(std::lround(m_appliedGainDb.load()));
+            text = db == 0 ? std::wstring(L"Now 0 dB") : std::format(L"Now {:+d} dB", db);
+        }
+        if (GainText().Text() != text)
+        {
+            GainText().Text(text);
+        }
+        GainText().Visibility(text.empty() ? Visibility::Collapsed : Visibility::Visible);
     }
 
     void MainWindow::BluetoothToggle_Toggled(winrt::Windows::Foundation::IInspectable const&, RoutedEventArgs const&)
@@ -1442,6 +1652,10 @@ namespace winrt::Phomic::implementation
     void MainWindow::DetailsButton_Click(winrt::Windows::Foundation::IInspectable const&, RoutedEventArgs const&)
     {
         const bool show = DetailsPanel().Visibility() == Visibility::Collapsed;
+        if (show)
+        {
+            UpdateDetails(m_server->GetStatus(), m_bluetooth->GetStatus(), m_usb->GetStatus()); // filled before it shows
+        }
         DetailsPanel().Visibility(show ? Visibility::Visible : Visibility::Collapsed);
         DetailsButton().Content(box_value(show ? L"Hide details" : L"Show details"));
     }

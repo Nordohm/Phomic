@@ -52,6 +52,7 @@ if (Test-Path "$stage\VBCABLE") { Remove-Item -Recurse -Force "$stage\VBCABLE" }
 New-Item -ItemType Directory -Force "$stage\licenses" | Out-Null
 Copy-Item "$root\..\LICENSE" "$stage\licenses\Phomic.txt"
 Copy-Item "$root\third_party\README.md" "$stage\licenses\third-party.md"
+Copy-Item "$root\installer\License.txt" "$stage\licenses\README.txt" # what the installer shows; the zip has no installer
 $zip = "$out\Phomic-$version-portable.zip"
 if (Test-Path $zip) { Remove-Item -Force $zip }
 Compress-Archive -Path "$stage\*" -DestinationPath $zip

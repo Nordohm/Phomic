@@ -14,7 +14,7 @@
     </Window.SystemBackdrop>
 
     <ScrollViewer x:Name="RootScroller" VerticalScrollBarVisibility="Auto">
-        <!--  Width set in code: at most 620, centered (see ResizeForDpi)  -->
+        <!--  Width set in code (see ResizeForDpi)  -->
         <StackPanel
             x:Name="RootPanel"
             Margin="24,20,24,24"
@@ -48,6 +48,22 @@
                 IsClosable="True"
                 Message="Windows uses “Phomic (internal)” as its default output, so everything you'd hear also goes into the Phomic microphone. Pick your speakers or headphones in Settings › System › Sound."
                 Severity="Warning" />
+
+            <!--  A newer Phomic for Windows is out (CheckForUpdate)  -->
+            <InfoBar
+                x:Name="UpdateBar"
+                IsClosable="True"
+                Message="Updating keeps your settings."
+                Severity="Informational"
+                Visibility="Collapsed">
+                <InfoBar.ActionButton>
+                    <Button
+                        HorizontalAlignment="Left"
+                        Click="UpdateButton_Click"
+                        Content="Download"
+                        Style="{StaticResource AccentButtonStyle}" />
+                </InfoBar.ActionButton>
+            </InfoBar>
 
             <!--  Connection  -->
             <Border Style="{StaticResource CardStyle}">
@@ -112,14 +128,7 @@
             <!--  Wi-Fi, Bluetooth and USB, one above the other  -->
             <Border Style="{StaticResource CardStyle}">
                 <StackPanel Spacing="14">
-                    <StackPanel Spacing="2">
-                        <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Connection" />
-                        <TextBlock
-                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                            Style="{StaticResource CaptionTextBlockStyle}"
-                            Text="One at a time. Pick Wi-Fi, Bluetooth or USB in Phomic on the iPhone, or switch here while connected."
-                            TextWrapping="Wrap" />
-                    </StackPanel>
+                    <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Connection" />
 
                     <Grid ColumnSpacing="12">
                         <Grid.ColumnDefinitions>
@@ -145,8 +154,9 @@
                             x:Name="SwitchToWiFiButton"
                             Grid.Column="2"
                             VerticalAlignment="Center"
+                            AutomationProperties.Name="Switch to Wi-Fi"
                             Click="SwitchToWiFiButton_Click"
-                            Content="Switch here"
+                            Content="Switch"
                             Visibility="Collapsed" />
                         <ToggleSwitch
                             x:Name="WiFiToggle"
@@ -182,8 +192,9 @@
                             x:Name="SwitchToBluetoothButton"
                             Grid.Column="2"
                             VerticalAlignment="Center"
+                            AutomationProperties.Name="Switch to Bluetooth"
                             Click="SwitchToBluetoothButton_Click"
-                            Content="Switch here"
+                            Content="Switch"
                             Visibility="Collapsed" />
                         <ToggleSwitch
                             x:Name="BluetoothToggle"
@@ -220,8 +231,9 @@
                             x:Name="SwitchToUsbButton"
                             Grid.Column="2"
                             VerticalAlignment="Center"
+                            AutomationProperties.Name="Switch to USB"
                             Click="SwitchToUsbButton_Click"
-                            Content="Switch here"
+                            Content="Switch"
                             Visibility="Collapsed" />
                         <Button
                             x:Name="UsbActionButton"
@@ -347,15 +359,49 @@
                             </Border.RenderTransform>
                         </Border>
                     </Grid>
-                    <Slider
-                        x:Name="GainSlider"
-                        Header="Gain"
-                        Maximum="24"
-                        Minimum="-12"
-                        StepFrequency="1"
-                        TickFrequency="6"
-                        TickPlacement="Outside"
-                        ValueChanged="GainSlider_ValueChanged" />
+                    <Grid ColumnSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="Automatic gain" />
+                            <TextBlock
+                                x:Name="GainText"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Style="{StaticResource CaptionTextBlockStyle}"
+                                TextWrapping="Wrap" />
+                        </StackPanel>
+                        <ToggleSwitch
+                            x:Name="AutoGainToggle"
+                            Grid.Column="1"
+                            MinWidth="0"
+                            VerticalAlignment="Center"
+                            OffContent=""
+                            OnContent=""
+                            Toggled="AutoGainToggle_Toggled" />
+                    </Grid>
+                    <!--  Only with automatic gain off. Range and end labels set in code.  -->
+                    <StackPanel x:Name="ManualGainPanel">
+                        <Slider
+                            x:Name="GainSlider"
+                            Header="Gain"
+                            StepFrequency="1"
+                            TickFrequency="6"
+                            TickPlacement="Outside"
+                            ValueChanged="GainSlider_ValueChanged" />
+                        <Grid>
+                            <TextBlock
+                                x:Name="GainMinText"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Style="{StaticResource CaptionTextBlockStyle}" />
+                            <TextBlock
+                                x:Name="GainMaxText"
+                                HorizontalAlignment="Right"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Style="{StaticResource CaptionTextBlockStyle}" />
+                        </Grid>
+                    </StackPanel>
                 </StackPanel>
             </Border>
 
@@ -373,7 +419,7 @@
                         HorizontalAlignment="Stretch"
                         Header="Buffering"
                         SelectionChanged="BufferCombo_SelectionChanged">
-                        <x:String>Auto – adapts to the connection</x:String>
+                        <x:String>Automatic</x:String>
                         <x:String>Low latency (30 ms)</x:String>
                         <x:String>Balanced (60 ms)</x:String>
                         <x:String>Stable (120 ms)</x:String>
