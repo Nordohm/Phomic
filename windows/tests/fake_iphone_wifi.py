@@ -132,12 +132,20 @@ def phomic_running():
 
 
 def set_pairing(required):
-    key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Phomic", 0, winreg.KEY_READ | winreg.KEY_WRITE)
-    old = winreg.QueryValueEx(key, "RequirePairingCode")[0]
-    winreg.SetValueEx(key, "RequirePairingCode", 0, winreg.REG_DWORD, 1 if required else 0)
-    code = winreg.QueryValueEx(key, "PairingCode")[0]
-    winreg.CloseKey(key)
-    return old, code
+    """Sets Phomic's "Require a pairing code" and returns what it was (off if never set)."""
+    with winreg.CreateKey(winreg.HKEY_CURRENT_USER, r"Software\Phomic") as key:
+        try:
+            old = winreg.QueryValueEx(key, "RequirePairingCode")[0]
+        except FileNotFoundError:
+            old = 0
+        winreg.SetValueEx(key, "RequirePairingCode", 0, winreg.REG_DWORD, 1 if required else 0)
+    return old
+
+
+def pairing_code():
+    """The PC's code. Phomic makes one the first time it needs it, so ask after a connection."""
+    with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Phomic") as key:
+        return winreg.QueryValueEx(key, "PairingCode")[0]
 
 
 # ------------------------------------------------------------------ tests
@@ -251,9 +259,10 @@ def t_switch_button():
 
 
 def t_pairing():
-    old, code = set_pairing(True)
+    old = set_pairing(True)
     try:
         c = Conn(); c.send(HELLO); r1 = c.line(); c.close()
+        code = pairing_code()
         c = Conn(); c.send(dict(HELLO, code="0000" if code != "0000" else "1111")); r2 = c.line(); c.close()
         c = Conn(); r3 = c.welcome(dict(HELLO, code=code)); c.send({"type": "bye"}); c.close()
     finally:
