@@ -92,6 +92,9 @@ namespace winrt::Phomic::implementation
         void ShowFromTray();
         void Quit();
         void FitToContent(double contentHeight);
+        bool SizesAreReal();
+        void KeepShape();
+        bool m_fitPending = false; // content changed while the window was hidden or minimized
         void RefreshDevices();
         void StartOutput(std::wstring const& target);
         bool OutputRunning() const;

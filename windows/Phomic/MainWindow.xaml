@@ -530,24 +530,48 @@
 
                 <!--  Output  -->
                 <Border Style="{StaticResource CardStyle}">
-                    <StackPanel Spacing="12">
+                    <!--  Labels left, choices right in one column (same left edge), filling the rest  -->
+                    <Grid ColumnSpacing="16" RowSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <TextBlock VerticalAlignment="Center" Text="Play the iPhone's audio into" />
                         <ComboBox
                             x:Name="OutputCombo"
+                            Grid.Column="1"
                             HorizontalAlignment="Stretch"
-                            Header="Play the iPhone's audio into"
+                            AutomationProperties.Name="Play the iPhone's audio into"
                             PlaceholderText="No playback devices found"
-                            SelectionChanged="OutputCombo_SelectionChanged" />
+                            SelectionChanged="OutputCombo_SelectionChanged">
+                            <!--  Long device names end in "…" instead of being cut off  -->
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding}" TextTrimming="CharacterEllipsis" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                        <TextBlock
+                            Grid.Row="1"
+                            VerticalAlignment="Center"
+                            Text="Buffering" />
                         <ComboBox
                             x:Name="BufferCombo"
+                            Grid.Row="1"
+                            Grid.Column="1"
                             HorizontalAlignment="Stretch"
-                            Header="Buffering"
+                            AutomationProperties.Name="Buffering"
                             SelectionChanged="BufferCombo_SelectionChanged">
                             <x:String>Automatic</x:String>
                             <x:String>Low latency (30 ms)</x:String>
                             <x:String>Balanced (60 ms)</x:String>
                             <x:String>Stable (120 ms)</x:String>
                         </ComboBox>
-                    </StackPanel>
+                    </Grid>
                 </Border>
 
                 <!--  App  -->

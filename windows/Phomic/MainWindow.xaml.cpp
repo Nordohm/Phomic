@@ -129,6 +129,10 @@ namespace winrt::Phomic::implementation
                 // Like Windows' own title bar: dimmed while another window is active.
                 const bool inactive = args.WindowActivationState() == WindowActivationState::Deactivated;
                 self->AppTitleText().Opacity(inactive ? 0.5 : 1.0);
+                if (!inactive)
+                {
+                    self->KeepShape(); // also the first time it's shown
+                }
             }
         });
         ResizeForDpi();
@@ -352,6 +356,47 @@ namespace winrt::Phomic::implementation
                 }
             }
         });
+        // The width is fixed, but Windows can still change it (it once came back wider, unseen,
+        // and stayed so until the content changed): whenever the size changes, put it back.
+        AppWindow().Changed([weak = get_weak()](auto&&, winrt::Microsoft::UI::Windowing::AppWindowChangedEventArgs const& args)
+        {
+            if (auto self = weak.get(); self && (args.DidSizeChange() || args.DidVisibilityChange() || args.DidPresenterChange()))
+            {
+                self->KeepShape();
+            }
+        });
+    }
+
+    // Only on screen and not minimized: then the window's sizes are its real ones.
+    bool MainWindow::SizesAreReal()
+    {
+        const HWND hwnd = WindowHandle();
+        return hwnd && IsWindowVisible(hwnd) && !IsIconic(hwnd);
+    }
+
+    void MainWindow::KeepShape()
+    {
+        if (!SizesAreReal())
+        {
+            return;
+        }
+        if (m_fitPending && m_contentHeight > 0)
+        {
+            m_fitPending = false;
+            FitToContent(m_contentHeight);
+        }
+        auto window = AppWindow();
+        const int32_t width = static_cast<int32_t>(std::lround(kWindowWidth * GetDpiForWindow(WindowHandle()) / 96.0));
+        if (window.ClientSize().Width != width)
+        {
+            // The size limits are what holds it to that width, so set them again first (from
+            // sizes that are real now), then the width.
+            if (m_contentHeight > 0)
+            {
+                FitToContent(m_contentHeight);
+            }
+            window.ResizeClient({ width, window.ClientSize().Height });
+        }
     }
 
     void MainWindow::FitToContent(double contentHeight)
@@ -360,6 +405,11 @@ namespace winrt::Phomic::implementation
         // and follows the content as it changes, unless the user made the window shorter.
         if (contentHeight <= 0)
         {
+            return;
+        }
+        if (!SizesAreReal())
+        {
+            m_fitPending = true; // see KeepShape: when it's back on screen
             return;
         }
         auto window = AppWindow();
