@@ -22,10 +22,11 @@ When Windows Firewall asks, allow Phomic on private networks.
 | | Wi-Fi | Bluetooth | USB |
 |---|---|---|---|
 | Audio | 48 kHz, uncompressed | 48 kHz, Opus | 48 kHz, uncompressed |
-| Delay | low | a little more | lowest |
+| Delay | ~10 ms + buffer | ~20 ms + buffer | ~1 ms + buffer |
 | Needs | the same network | the PC within about 10 m | a cable, and Apple's free [Apple Devices](https://apps.microsoft.com/detail/9NP83LWLPZ9K) app on the PC |
 
-You can switch while you talk: pick another tab on the iPhone, or click **Switch** in the PC app.
+The buffer adapts to the connection: 20–200 ms (at least 30 ms on Bluetooth). You can switch while you talk: pick
+another tab on the iPhone, or click **Switch** in the PC app.
 
 ## Troubleshooting
 
