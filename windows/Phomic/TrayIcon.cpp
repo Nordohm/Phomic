@@ -193,6 +193,21 @@ namespace phomic
             m_onCommand(Command::Quit);
             return 0;
         }
+        // Windows is ending the session, or an installer asks Phomic to close (Restart
+        // Manager): quit for real. The window alone would only close (or go to the tray), the
+        // process would stay, and an installer would wait until it gave up and ended it.
+        if (message == WM_QUERYENDSESSION)
+        {
+            return TRUE;
+        }
+        if (message == WM_ENDSESSION)
+        {
+            if (wParam)
+            {
+                m_onCommand(Command::Quit);
+            }
+            return 0;
+        }
         if (message == m_taskbarCreated && m_taskbarCreated != 0)
         {
             Add(); // Explorer restarted

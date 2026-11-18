@@ -36,3 +36,22 @@ The same on every platform:
   otherwise open that prefix.
 - An environment variable that overrides the URL lets tests serve a fake reply.
 - WinUI: an `InfoBar` at the top, with an action button and its close button.
+
+## Windows: updating in place
+
+Instead of opening the download page, the button can install the update (for a copy the installer set up;
+a portable copy still gets the page):
+
+- Take the installer's `digest` (`sha256:<hex>`) from the same API reply, download `browser_download_url`
+  (`HttpClient.GetBufferAsync`, with a progress handler for "Downloading… 45 %"), hash it
+  (`HashAlgorithmProvider` SHA-256) and refuse to run anything that doesn't match.
+- Save it to the temp folder and run it with `ShellExecuteEx`. An Inno Setup per-user installer needs no admin
+  rights: `/SILENT /SUPPRESSMSGBOXES /NORESTART` shows only a progress window. Then quit the app.
+- Inno skips `postinstall` entries when silent, so add a `[Run]` entry gated on a parameter of your own
+  (`Check: Switch('RESTARTAPP')`) to start the new version afterwards.
+- Make sure the running app really exits when asked: an installer's Restart Manager sends `WM_QUERYENDSESSION` /
+  `WM_ENDSESSION` to its windows, and an app that only hides to the tray makes Setup wait about 30 s and then kill
+  it. Handle `WM_ENDSESSION` by quitting, and have Setup's `PrepareToInstall` ask the running copy to quit first.
+- On failure, say why and fall back to the download page.
+- Test with a fake API reply that points at a real release's installer, once with its digest and once with a wrong
+  one, and an environment variable that stops before running it.

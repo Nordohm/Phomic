@@ -147,8 +147,12 @@ need to create a project in Visual Studio; it's already in `windows/`.
   sends it). Either way a limiter keeps the result under -1 dBFS: loud parts are turned down for a moment instead
   of clipping, and the level shows *limiting* while it does.
 - **Updates:** shortly after starting and then twice a day, Phomic asks GitHub for its latest release. If that's
-  newer, a banner at the top offers the installer; closing it hides it until the next version. (For testing,
-  `PHOMIC_UPDATE_URL` points the check at another URL.)
+  newer, a banner at the top offers it; closing it hides it until the next version. *Update* downloads the
+  release's installer (only from Phomic's own releases), checks it against the SHA-256 GitHub lists for it, runs it
+  with `/SILENT /RESTARTPHOMIC=1` (a small progress window; Setup closes Phomic and starts the new one) and quits.
+  A copy not set up by the installer (no `unins000.exe` next to it, like the portable zip) gets *Download*, which
+  opens the release page. For testing, `PHOMIC_UPDATE_URL` points the check at another URL, and
+  `PHOMIC_UPDATE_DRY_RUN=1` stops before running the installer.
 - *Show details* under *Connection* lists the stream (link, audio format, packets and loss, buffer,
   interruptions) while an iPhone is connected, and this PC's name, addresses, port and Bluetooth state.
 - Icon: an iPhone as the capsule of a microphone, drawn on a 24-pixel grid so it stays readable at taskbar size.

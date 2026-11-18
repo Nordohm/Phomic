@@ -978,7 +978,7 @@ namespace winrt::Phomic::implementation
             source = custom;
         }
 
-        std::wstring tag, page, installer;
+        std::wstring tag, page, installer, digest;
         try
         {
             namespace http = winrt::Windows::Web::Http;
@@ -999,6 +999,7 @@ namespace winrt::Phomic::implementation
                 if (name.starts_with(L"Phomic-Setup-") && name.ends_with(L".exe"))
                 {
                     installer = asset.GetNamedString(L"browser_download_url", L"");
+                    digest = asset.GetNamedString(L"digest", L""); // "sha256:<hex>"
                 }
             }
         }
@@ -1026,16 +1027,153 @@ namespace winrt::Phomic::implementation
         }
         self->m_updateVersion = version;
         self->m_updateUrl = url;
+        // What Update downloads and runs: only Phomic's own installer, with GitHub's checksum.
+        self->m_updateInstaller = installer.starts_with(kReleases) ? installer : std::wstring();
+        self->m_updateDigest = digest.starts_with(L"sha256:") ? digest.substr(7) : std::wstring();
+        std::transform(self->m_updateDigest.begin(), self->m_updateDigest.end(), self->m_updateDigest.begin(), towlower);
         self->UpdateBar().Title(std::format(L"Phomic {} is available", version));
+        self->UpdateButton().Content(box_value(self->CanInstallUpdate() ? L"Update" : L"Download"));
         ShowBar(self->UpdateBar(), true);
     }
 
     void MainWindow::UpdateButton_Click(winrt::Windows::Foundation::IInspectable const&, RoutedEventArgs const&)
     {
-        if (!m_updateUrl.empty())
+        if (CanInstallUpdate())
+        {
+            InstallUpdate();
+        }
+        else if (!m_updateUrl.empty())
         {
             ShellExecuteW(nullptr, L"open", m_updateUrl.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
         }
+    }
+
+    // Set up by the installer (its uninstaller sits next to Phomic.exe), so the installer can
+    // update it in place. A portable copy gets the download page instead.
+    bool MainWindow::CanInstallUpdate() const
+    {
+        if (m_updateInstaller.empty() || m_updateDigest.size() != 64)
+        {
+            return false;
+        }
+        std::wstring folder = phomic::virtualmic::OwnExePath();
+        folder.resize(folder.find_last_of(L'\\') + 1);
+        return GetFileAttributesW((folder + L"unins000.exe").c_str()) != INVALID_FILE_ATTRIBUTES;
+    }
+
+    // Downloads the new installer, checks it against GitHub's SHA-256 for it, and runs it
+    // silently (a small progress window only); Phomic quits, and the installer starts it again
+    // (/RESTARTPHOMIC=1). PHOMIC_UPDATE_DRY_RUN stops before running it (for testing).
+    winrt::fire_and_forget MainWindow::InstallUpdate()
+    {
+        if (m_updating)
+        {
+            co_return;
+        }
+        m_updating = true;
+        const std::wstring url = m_updateInstaller;
+        const std::wstring digest = m_updateDigest;
+        const std::wstring version = m_updateVersion;
+        UpdateButton().IsEnabled(false);
+        UpdateBar().IsClosable(false);
+        UpdateBar().Title(std::format(L"Downloading Phomic {}…", version));
+
+        auto weak = get_weak();
+        winrt::apartment_context ui;
+        std::wstring error;
+        std::wstring path;
+        try
+        {
+            namespace http = winrt::Windows::Web::Http;
+            http::Filters::HttpBaseProtocolFilter filter;
+            filter.CacheControl().ReadBehavior(http::Filters::HttpCacheReadBehavior::NoCache);
+            http::HttpClient client(filter);
+            client.DefaultRequestHeaders().UserAgent().TryParseAdd(L"Phomic/" PHOMIC_VERSION_STRING);
+            auto download = client.GetBufferAsync(winrt::Windows::Foundation::Uri(url));
+            auto shown = std::make_shared<std::atomic<int>>(-1);
+            download.Progress([weak, shown, version, queue = DispatcherQueue()](auto&&, http::HttpProgress const& progress)
+            {
+                const auto total = progress.TotalBytesToReceive;
+                if (!total || total.Value() == 0)
+                {
+                    return;
+                }
+                const int percent = static_cast<int>(std::min<uint64_t>(100, progress.BytesReceived * 100 / total.Value()));
+                if (shown->exchange(percent) != percent)
+                {
+                    queue.TryEnqueue([weak, percent, version]
+                    {
+                        if (auto self = weak.get())
+                        {
+                            self->UpdateBar().Title(std::format(L"Downloading Phomic {}… {} %", version, percent));
+                        }
+                    });
+                }
+            });
+            const auto buffer = co_await download;
+
+            namespace crypto = winrt::Windows::Security::Cryptography;
+            const auto sha256 = crypto::Core::HashAlgorithmProvider::OpenAlgorithm(crypto::Core::HashAlgorithmNames::Sha256());
+            std::wstring hash{ crypto::CryptographicBuffer::EncodeToHexString(sha256.HashData(buffer)) };
+            std::transform(hash.begin(), hash.end(), hash.begin(), towlower);
+            if (hash != digest)
+            {
+                error = L"The download doesn't match the release.";
+            }
+            else
+            {
+                wchar_t temp[MAX_PATH]{};
+                GetTempPathW(ARRAYSIZE(temp), temp);
+                path = std::format(L"{}Phomic-Setup-{}.exe", temp, version);
+                const winrt::handle file{ CreateFileW(path.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr) };
+                DWORD written = 0;
+                if (file.get() == INVALID_HANDLE_VALUE || !WriteFile(file.get(), buffer.data(), buffer.Length(), &written, nullptr) ||
+                    written != buffer.Length())
+                {
+                    error = L"Couldn't save the download.";
+                }
+            }
+        }
+        catch (winrt::hresult_error const& e)
+        {
+            error = std::wstring(e.message());
+        }
+        co_await ui;
+        auto self = weak.get();
+        if (!self)
+        {
+            co_return;
+        }
+
+        if (error.empty())
+        {
+            if (GetEnvironmentVariableW(L"PHOMIC_UPDATE_DRY_RUN", nullptr, 0) > 0)
+            {
+                self->UpdateBar().Title(std::format(L"Phomic {} downloaded and checked (dry run: not installed)", version));
+                co_return;
+            }
+            SHELLEXECUTEINFOW run{ sizeof(run) };
+            run.lpVerb = L"open";
+            run.lpFile = path.c_str();
+            run.lpParameters = L"/SILENT /SUPPRESSMSGBOXES /NORESTART /RESTARTPHOMIC=1";
+            run.nShow = SW_SHOWNORMAL;
+            if (ShellExecuteExW(&run))
+            {
+                self->UpdateBar().Title(std::format(L"Installing Phomic {}…", version));
+                self->Quit(); // the installer starts the new one
+                co_return;
+            }
+            error = std::wstring(hresult_error(HRESULT_FROM_WIN32(GetLastError())).message());
+        }
+
+        // Didn't work: say why, and offer the download page instead.
+        self->m_updating = false;
+        self->m_updateInstaller.clear();
+        self->UpdateBar().Title(std::format(L"Phomic {} is available", version));
+        self->UpdateButton().Content(box_value(L"Download"));
+        self->UpdateButton().IsEnabled(true);
+        self->UpdateBar().IsClosable(true);
+        self->ShowError(L"Couldn't update Phomic", error);
     }
 
     void MainWindow::GetIPhoneAppLink_Click(winrt::Windows::Foundation::IInspectable const&, RoutedEventArgs const&)

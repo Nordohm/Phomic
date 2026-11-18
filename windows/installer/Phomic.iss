@@ -56,11 +56,29 @@ Name: "{autodesktop}\Phomic"; Filename: "{app}\Phomic.exe"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\Phomic.exe"; Description: "{cm:LaunchProgram,Phomic}"; Flags: nowait postinstall skipifsilent
+; Phomic's own Update runs Setup silently with /RESTARTPHOMIC=1: start it again afterwards.
+Filename: "{app}\Phomic.exe"; Flags: nowait; Check: Switch('RESTARTPHOMIC')
 
 [Code]
 function Switch(const Name: String): Boolean;
 begin
   Result := ExpandConstant('{param:' + Name + '|0}') = '1';
+end;
+
+// Updating: first close the running Phomic the way Quit in its tray menu does (1.2.1 and later
+// understand --quit). Otherwise Windows' Restart Manager closes only its window, and Setup waits
+// at "Closing applications" until it gives up and ends the process.
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  Exe: String;
+  VersionMS, VersionLS: Cardinal;
+  ResultCode: Integer;
+begin
+  Result := '';
+  Exe := ExpandConstant('{app}\Phomic.exe');
+  if FileExists(Exe) and GetVersionNumbers(Exe, VersionMS, VersionLS) and
+     ((VersionMS > $00010002) or ((VersionMS = $00010002) and (VersionLS >= $00010000))) then
+    Exec(Exe, '--quit', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
 end;
 
 // VB-CABLE's own setup, which also removes it (VB-Audio's window, with a Remove Driver button).

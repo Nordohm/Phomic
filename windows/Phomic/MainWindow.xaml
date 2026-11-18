@@ -87,7 +87,9 @@
                     Severity="Informational"
                     Visibility="Collapsed">
                     <InfoBar.ActionButton>
+                        <!--  Update (installs it) or Download (opens the release page), set in code  -->
                         <Button
+                            x:Name="UpdateButton"
                             HorizontalAlignment="Left"
                             Click="UpdateButton_Click"
                             Content="Download"

@@ -81,6 +81,11 @@ namespace winrt::Phomic::implementation
         winrt::fire_and_forget CheckForUpdate();
         std::wstring m_updateVersion;   // newer release on GitHub, e.g. "1.2.0" (empty: none)
         std::wstring m_updateUrl;       // its release page
+        std::wstring m_updateInstaller; // its installer (Phomic's own releases only), for Update
+        std::wstring m_updateDigest;    // and the installer's SHA-256 from GitHub (hex)
+        bool m_updating = false;
+        bool CanInstallUpdate() const;
+        winrt::fire_and_forget InstallUpdate();
         double m_badgeScale = 0;        // display scale the App Store badge was drawn for
         void RunMicAction(MicAction action);
         static MicResult RunMicActionBlocking(MicAction action);
