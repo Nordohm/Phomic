@@ -25,7 +25,10 @@ permissions:
 
 jobs:
   build:
-    runs-on: macos-latest
+    # Xcode 27 (the iOS 27 SDK): App Store Connect requires it from April 2027. GitHub's
+    # macos-latest only has Xcode 26; this image is still a preview there. If it misbehaves,
+    # macos-latest works until then.
+    runs-on: xcode-27
     timeout-minutes: 60
     defaults:
       run:
