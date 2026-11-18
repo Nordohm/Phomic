@@ -1048,6 +1048,33 @@ namespace winrt::Phomic::implementation
         }
     }
 
+    // The installer Update downloaded (see InstallUpdate) stays in the temp folder: it's still
+    // running when it starts the new Phomic. Remove it the next time, when it's long done.
+    void MainWindow::RemoveDownloadedInstallers()
+    {
+        if (m_updating)
+        {
+            return;
+        }
+        wchar_t temp[MAX_PATH]{};
+        if (GetTempPathW(ARRAYSIZE(temp), temp) == 0)
+        {
+            return;
+        }
+        const std::wstring folder = temp;
+        WIN32_FIND_DATAW found{};
+        const HANDLE search = FindFirstFileW((folder + L"Phomic-Setup-*.exe").c_str(), &found);
+        if (search == INVALID_HANDLE_VALUE)
+        {
+            return;
+        }
+        do
+        {
+            DeleteFileW((folder + found.cFileName).c_str()); // one still in use stays until next time
+        } while (FindNextFileW(search, &found));
+        FindClose(search);
+    }
+
     // Set up by the installer (its uninstaller sits next to Phomic.exe), so the installer can
     // update it in place. A portable copy gets the download page instead.
     bool MainWindow::CanInstallUpdate() const
@@ -1226,6 +1253,7 @@ namespace winrt::Phomic::implementation
         // for weeks.
         if (m_tick % (12 * 3600 * kTicksPerSecond) == 15 * kTicksPerSecond)
         {
+            RemoveDownloadedInstallers();
             CheckForUpdate();
         }
 

@@ -86,6 +86,7 @@ namespace winrt::Phomic::implementation
         bool m_updating = false;
         bool CanInstallUpdate() const;
         winrt::fire_and_forget InstallUpdate();
+        void RemoveDownloadedInstallers();
         double m_badgeScale = 0;        // display scale the App Store badge was drawn for
         void RunMicAction(MicAction action);
         static MicResult RunMicActionBlocking(MicAction action);

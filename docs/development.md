@@ -150,6 +150,7 @@ need to create a project in Visual Studio; it's already in `windows/`.
   newer, a banner at the top offers it; closing it hides it until the next version. *Update* downloads the
   release's installer (only from Phomic's own releases), checks it against the SHA-256 GitHub lists for it, runs it
   with `/SILENT /RESTARTPHOMIC=1` (a small progress window; Setup closes Phomic and starts the new one) and quits.
+  The next check (15 s after the new one starts) deletes the downloaded installer from the temp folder.
   A copy not set up by the installer (no `unins000.exe` next to it, like the portable zip) gets *Download*, which
   opens the release page. For testing, `PHOMIC_UPDATE_URL` points the check at another URL, and
   `PHOMIC_UPDATE_DRY_RUN=1` stops before running the installer.
