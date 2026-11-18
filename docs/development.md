@@ -1,7 +1,8 @@
 # Development
 
 How the apps are built and how they work inside. The protocols between them are in
-[protocols.md](protocols.md).
+[protocols.md](protocols.md). General notes that aren't about this app (releasing, platform pitfalls, legal,
+writing) are in [`.claude/skills/`](../.claude/skills/), one folder per topic.
 
 | Part | Tech | Location |
 |---|---|---|
@@ -195,7 +196,8 @@ xtool dev build      # just compile (unsigned)
   there it needs the iOS SDK extracted from Xcode, and Apple's Xcode license only allows that SDK on Apple
   computers.
 - **SDK version:** xtool's linker records the deployment target (18.0) as the SDK version, and iOS then shows the
-  app as if it were built for iOS 18 (no Liquid Glass). `Package.swift` passes the linker SDK 26.0 instead.
+  app as if it were built for iOS 18 (no Liquid Glass). `Package.swift` passes the linker the real SDK version
+  (27.2) instead; update it there when the SDK changes.
 - **App ID:** `io.github.nordohm.Phomic` (`xtool.yml`). An App ID belongs to one developer team, so change it to
   your own before you build. With a free Apple account, xtool's signature lasts 7 days, so run `xtool dev` again
   after that; a paid developer account makes it last a year.

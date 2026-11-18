@@ -6,9 +6,10 @@ import PackageDescription
 // deployment target there (18.0) instead of the SDK's own version, and iOS then runs the app
 // the way it ran apps built for iOS 18: no Liquid Glass tab bar, square glass buttons, system
 // menus drawn the old way. This passes the linker its version again (the last one wins):
-// minimum iOS 18.0 (as in `platforms` below), SDK 26.0, the first with the current design.
+// minimum iOS 18.0 (as in `platforms` below), SDK 27.2, the one xtool's Darwin SDK holds and
+// App Store builds use (Xcode 27.2), so both behave the same. Update it with the SDK.
 // App Store builds come from Xcode (Xcode/project.yml) and record their real SDK.
-let iOSSDKVersion = ["-Xlinker", "-platform_version", "-Xlinker", "ios", "-Xlinker", "18.0", "-Xlinker", "26.0"]
+let iOSSDKVersion = ["-Xlinker", "-platform_version", "-Xlinker", "ios", "-Xlinker", "18.0", "-Xlinker", "27.2"]
 
 let package = Package(
     name: "Phomic",
