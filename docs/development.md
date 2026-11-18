@@ -1,8 +1,7 @@
 # Development
 
 How the apps are built and how they work inside. The protocols between them are in
-[protocols.md](protocols.md). General notes that aren't about this app (releasing, platform pitfalls, legal,
-writing) are in [`.claude/skills/`](../.claude/skills/), one folder per topic.
+[protocols.md](protocols.md).
 
 | Part | Tech | Location |
 |---|---|---|
