@@ -30,44 +30,26 @@ Turn your iPhone into a microphone for your PC, over Wi-Fi, Bluetooth or a USB c
 **Description** (4,000)
 
 ```
-Phomic turns your iPhone into a microphone for your Windows PC, wirelessly or with a cable.
+Your iPhone as a microphone for your Windows PC, over Wi-Fi, Bluetooth or a USB cable.
 
-Install the free Phomic app on your PC, open Phomic on your iPhone and tap your computer, or plug the iPhone in. Your iPhone's microphone then shows up on the PC as a microphone called "Phomic", so you can pick it in any app that uses one: voice chat, video calls, streaming and recording.
+• Works in any app on the PC: voice chat, calls, streaming, recording
+• Switch between Wi-Fi, Bluetooth and USB while you talk
+• Mute from the Lock Screen or the Dynamic Island
+• Automatic gain keeps your voice at an even level
+• Audio goes straight to your PC, never through the internet
+• No account, no ads, no tracking
 
-WI-FI, BLUETOOTH OR USB
-• Wi-Fi: uncompressed 48 kHz audio with low latency on your local network.
-• Bluetooth: no network needed, within about 10 meters of the PC.
-• USB: plug the iPhone into the PC for the lowest latency. It connects by itself.
-• Switch between them while you talk.
-
-MUTE FROM ANYWHERE
-• One big button: green when you're live, red when you're muted. The screen glows with your voice.
-• A Live Activity on the Lock Screen and in the Dynamic Island, with its own mute button.
-• Muting fully releases the microphone.
-
-SOUNDS LIKE YOUR IPHONE
-• Phomic sends the microphone as it is. Choose Standard, Voice Isolation or Wide Spectrum with the iPhone's Mic Mode.
-• The PC app evens out the level automatically, or you set it yourself.
-
-PRIVATE BY DESIGN
-• Audio goes straight from your iPhone to your PC, over your own network, Bluetooth or a cable. Nothing goes through the internet.
-• No account, no ads, no tracking.
-• An optional pairing code keeps other phones out.
-
-WHAT YOU NEED
-• A Windows 10 or 11 PC with the free Phomic app: github.com/Nordohm/Phomic
-• VB-CABLE, a free virtual audio driver by VB-Audio. The PC app shows you how to get it.
-• For USB: Apple Devices, Apple's free app from the Microsoft Store.
+Needs the free Phomic app for Windows (github.com/Nordohm/Phomic) and VB-CABLE, a free audio driver by VB-Audio. USB also needs Apple Devices from the Microsoft Store.
 ```
 
 **What's New in This Version** (4,000)
 
 ```
-• Automatic gain: Phomic 1.2 for Windows keeps your voice at an even level.
-• Muting and unmuting are smoother.
-• The glow warms through yellow and orange as you get loud, instead of jumping to red.
-• The Live Activity no longer says "Phomic stopped" while you're live.
-• Phomic tells you when a new version is out.
+• Automatic gain with Phomic 1.2 for Windows
+• Smoother mute button
+• The glow warms to red as you get loud
+• Fixed: Live Activity saying "Phomic stopped"
+• Tells you when an update is out
 ```
 
 **Keywords** (100; words from the name and subtitle are already indexed)
