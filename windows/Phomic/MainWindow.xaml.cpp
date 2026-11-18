@@ -46,6 +46,36 @@ namespace
         return static_cast<float>(std::pow(10.0, db / 20.0));
     }
 
+    // The USB row under Show details: Apple's USB service, and what it and Windows see. The
+    // cable hint only where it can help: when neither sees an iPhone.
+    std::wstring UsbDetail(phomic::UsbReceiver::Status const& usb)
+    {
+        const auto iPhones = [](uint32_t count) { return std::format(L"{} iPhone{}", count, count == 1 ? L"" : L"s"); };
+        if (!usb.enabled)
+        {
+            return L"Off";
+        }
+        if (!usb.checked)
+        {
+            return L"—";
+        }
+        if (!usb.serviceRunning)
+        {
+            return usb.windowsDevices > 0
+                ? std::format(L"Apple's USB service isn't running (Windows sees {})", iPhones(usb.windowsDevices))
+                : std::wstring(L"Apple's USB service isn't running");
+        }
+        if (usb.devices != usb.windowsDevices)
+        {
+            return std::format(L"Apple's USB service sees {}, Windows sees {}", iPhones(usb.devices), usb.windowsDevices);
+        }
+        if (usb.devices == 0)
+        {
+            return L"Apple's USB service is running, but no iPhone is connected. Some cables only charge.";
+        }
+        return std::format(L"Apple's USB service is running and sees {}", iPhones(usb.devices));
+    }
+
     std::wstring GainHeader(int db)
     {
         return db == 0 ? std::wstring(L"Gain (0 dB)") : std::format(L"Gain ({:+d} dB)", db);
@@ -1583,13 +1613,7 @@ namespace winrt::Phomic::implementation
             { L"Addresses", addresses.empty() ? std::wstring(L"No network") : addresses },
             { L"Port", std::format(L"{} (TCP and UDP)", m_server->Port()) },
             { L"Bluetooth", bluetoothState.empty() ? std::wstring(L"—") : bluetoothState },
-            { L"USB", !usb.enabled ? std::wstring(L"Off")
-                : !usb.checked ? std::wstring(L"—")
-                : usb.serviceRunning
-                    ? std::format(L"Apple's USB service is running and sees {} iPhone{} (Windows sees {}). Nothing at "
-                                  L"all? Some cables only charge.", usb.devices, usb.devices == 1 ? L"" : L"s", usb.windowsDevices)
-                    : std::format(L"Apple's USB service isn't running (Windows sees {} iPhone{})",
-                                  usb.windowsDevices, usb.windowsDevices == 1 ? L"" : L"s") },
+            { L"USB", UsbDetail(usb) },
             { L"Version", L"Phomic " PHOMIC_VERSION_STRING },
             // Credit for the driver the microphone runs on: the two facts VB-CABLE's readme asks
             // distributors to mention (Phomic doesn't distribute it, so this is a courtesy).
