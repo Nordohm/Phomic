@@ -32,6 +32,8 @@ Turn your iPhone into a microphone for your PC, over Wi-Fi, Bluetooth or a USB c
 ```
 Your iPhone as a microphone for your Windows PC, over Wi-Fi, Bluetooth or a USB cable.
 
+Get the free Windows app at nordohm.com/Phomic
+
 • Works in any app on the PC: voice chat, calls, streaming, recording
 • Switch between Wi-Fi, Bluetooth and USB while you talk
 • Mute from the Lock Screen or the Dynamic Island
@@ -39,17 +41,22 @@ Your iPhone as a microphone for your Windows PC, over Wi-Fi, Bluetooth or a USB 
 • Audio goes straight to your PC, never through the internet
 • No account, no ads, no tracking
 
-Needs the free Phomic app for Windows (github.com/Nordohm/Phomic) and VB-CABLE, a free audio driver by VB-Audio. USB also needs Apple Devices from the Microsoft Store.
+The Windows app also needs VB-CABLE, a free audio driver by VB-Audio. USB needs Apple Devices from the Microsoft Store.
 ```
 
 **What's New in This Version** (4,000)
 
 ```
+New
 • Automatic gain with Phomic 1.2 for Windows
+• Tells you when an update is out
+
+Improved
 • Smoother mute button
 • The glow warms to red as you get loud
-• Fixed: Live Activity saying "Phomic stopped"
-• Tells you when an update is out
+
+Fixed
+• Live Activity no longer says "Phomic stopped"
 ```
 
 **Keywords** (100; words from the name and subtitle are already indexed)
@@ -67,7 +74,7 @@ https://github.com/Nordohm/Phomic/issues
 **Marketing URL** (optional)
 
 ```
-https://github.com/Nordohm/Phomic
+https://nordohm.com/Phomic
 ```
 
 **Copyright** (200)
@@ -87,27 +94,22 @@ The URLs only work once the repository is public.
 
 - **Sign-in required:** off. Phomic has no accounts.
 - **Contact information:** yours.
-- **Attachment:** none so far; the notes offer a screen recording of the whole flow (PC app, iPhone app,
-  muting from the Lock Screen), since the reviewer probably has no Windows PC to test with.
+- **Attachment:** none. Apple asks if it needs one.
 
 **Notes** (4,000)
 
 ```
-Phomic streams the iPhone's microphone to a Windows PC, where it appears as a microphone for other apps. It needs the free companion app on the PC (https://github.com/Nordohm/Phomic/releases) and VB-CABLE, a free virtual audio driver by VB-Audio that the PC app links to. We're happy to send a video of the whole flow if that helps.
+Phomic sends the iPhone's microphone to a Windows PC, where it shows up as a microphone for other apps. It needs the free PC app (https://github.com/Nordohm/Phomic/releases) and VB-CABLE, a free audio driver by VB-Audio that the PC app links to. Without the PC app, the list of computers stays empty.
 
-Without the PC app, Phomic opens to its main screen and lists no computers.
-
-To test with a PC:
-1. Install Phomic on a Windows 10 or 11 PC. Follow its banner to install VB-CABLE, then click Set up.
-2. On the iPhone, pick the Wi-Fi or Bluetooth tab and tap the PC. For USB, install Apple Devices from the Microsoft Store on the PC, plug the iPhone in and pick the USB tab: the PC connects by itself.
-3. Speak: the level meter in the PC app moves, and the "Phomic" microphone works in any app on the PC.
-4. Tap the big button, or the Live Activity's button on the Lock Screen, to mute and unmute.
+To test:
+1. On a Windows 10 or 11 PC, install Phomic, follow its banner to install VB-CABLE, then click Set up.
+2. On the iPhone, pick the Wi-Fi or Bluetooth tab and tap the PC. USB: install Apple Devices from the Microsoft Store on the PC, plug the iPhone in and pick the USB tab.
+3. Speak: the PC app's level meter moves.
+4. Tap the big button, or the Live Activity's button, to mute.
 
 Background modes:
-- audio: while live, Phomic records the microphone in the background, so the PC keeps hearing the user with the screen locked. While muted, the microphone is released (no orange indicator) and a silent, mixable audio session keeps the connection to the PC open, so the user can unmute from the Live Activity without reconnecting.
+- audio: keeps sending the microphone with the screen locked. While muted, the microphone is released (no orange dot) and a silent, mixable audio session keeps the connection, so the Live Activity can unmute.
 - bluetooth-central: reconnects to the PC over Bluetooth after a dropout.
-
-No account or sign-in is needed, and the app collects no data.
 ```
 
 ## Assets
