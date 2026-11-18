@@ -14,21 +14,32 @@ iPhone mic ─► RemoteIO ├─ USB cable: the same packets and control, one T
 **Discovery:** the PC registers DNS-SD service `<computer name>._phomic._tcp.local` on port 50505, with TXT
 `v=1`, `id=<PC id>` (8 hex digits, the same id as over Bluetooth) and `pair=1|0` (whether a code is required).
 
-**Control:** TCP to port 50505, one UTF-8 JSON object per line (`\n`).
+**Control:** TCP to port 50505, one UTF-8 JSON object per line (`\n`). `→` is from the phone, `←` from the PC:
 
-| Direction | Message | Notes |
-|---|---|---|
-| phone → PC | `{"type":"hello","version":1,"name":"iPhone","sampleRate":48000,"channels":1,"frameSamples":480,"code":"1234"}` | must be the first line, within 5 s; `code` only if the phone knows one |
-| PC → phone | `{"type":"welcome","version":1,"name":"MY-PC","pcId":"3A7C91E2","udpPort":50505,"session":123456789}` | |
-| PC → phone | `{"type":"error","reason":"pairing","pcId":"…","name":"MY-PC","message":"Wrong pairing code."}` | missing or wrong code; the phone asks the user for it |
-| PC → phone | `{"type":"error","message":"…"}` | any other refusal; then closes, and the phone doesn't auto-retry |
-| phone → PC | `{"type":"ping","id":7,"rtt":9.8}` | every second; `rtt` is the last measured round trip in ms |
-| PC → phone | `{"type":"pong","id":7}` | |
-| phone → PC | `{"type":"mute","muted":true}` | the phone stops sending audio while muted |
-| PC → phone | `{"type":"switch","transport":"bluetooth"}` | the PC's *Switch*: the phone hangs up and moves to that transport (`wifi`, `bluetooth` or `usb`) |
-| either | `{"type":"bye"}` | clean hang-up |
+```
+→ {"type":"hello","version":1,"name":"iPhone","sampleRate":48000,"channels":1,"frameSamples":480,"code":"1234"}
+← {"type":"welcome","version":1,"name":"MY-PC","pcId":"3A7C91E2","udpPort":50505,"session":123456789}
+→ {"type":"ping","id":7,"rtt":9.8}
+← {"type":"pong","id":7}
+→ {"type":"mute","muted":true}
+← {"type":"switch","transport":"bluetooth"}
+→ {"type":"bye"}
+```
 
-The PC drops a phone it hasn't heard from in 6 s, and the phone gives up after 5 s without a reply.
+- `hello` must be the first line, within 5 s. It has `code` only if the phone knows one.
+- Instead of `welcome`, the PC can refuse and close the connection. For a missing or wrong code it sends the first
+  error below, and the phone asks the user for the code. For anything else it sends the second, and the phone
+  doesn't retry by itself.
+  ```
+  ← {"type":"error","reason":"pairing","pcId":"3A7C91E2","name":"MY-PC","message":"Wrong pairing code."}
+  ← {"type":"error","message":"…"}
+  ```
+- The phone pings every second; `rtt` is the last measured round trip in ms. The PC drops a phone it hasn't heard
+  from in 6 s, and the phone gives up after 5 s without a reply.
+- While muted, the phone sends no audio.
+- `switch` is the PC's *Switch* button: the phone hangs up and moves to that transport (`wifi`, `bluetooth` or
+  `usb`).
+- Either side can send `bye` to hang up.
 
 **Audio:** UDP from the phone to `udpPort` on the address the TCP connection resolved to. Each datagram
 is 972 bytes, little-endian: `"PHMC"` magic (4) · `session` (4) · sequence number (4, wraps) · 480 × int16 PCM
@@ -70,9 +81,12 @@ That's all an iPhone needs to list the PC (with its lock icon) and to find exact
 
 | UUID | What | Properties |
 |---|---|---|
-| `8E5A1C6<c>-3B7D-4F62-9A1E-6C2D<PC id>` | service; `c` = `1` if a pairing code is required, else `0`; e.g. `8E5A1C60-…-6C2D3A7C91E2` for PC `3A7C91E2` | advertised |
+| `8E5A1C6<c>-3B7D-4F62-9A1E-6C2D<PC id>` | service | advertised |
 | `8E5A1C51-3B7D-4F62-9A1E-6C2D4B8F0A11` | audio | write without response |
 | `8E5A1C52-3B7D-4F62-9A1E-6C2D4B8F0A11` | control (UTF-8 JSON) | write, notify |
+
+In the service UUID, `<c>` is `1` if a pairing code is required, else `0`. PC `3A7C91E2` without a code advertises
+`8E5A1C60-3B7D-4F62-9A1E-6C2D3A7C91E2`.
 
 When the pairing setting changes, the PC republishes the service under the other UUID once no iPhone is
 connected over Bluetooth.

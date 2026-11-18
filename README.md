@@ -42,8 +42,7 @@ another tab on the iPhone, or click **Switch** in the PC app.
 
 ## Support
 
-If Phomic is useful to you, [buy me a coffee](https://buymeacoffee.com/nordohm) ☕. VB-CABLE is donationware by
-VB-Audio: you can support them at [vb-cable.com](https://vb-cable.com).
+If Phomic is useful to you, [buy me a coffee](https://buymeacoffee.com/nordohm) ☕.
 
 ## Development
 
