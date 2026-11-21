@@ -96,7 +96,7 @@ final class MicController {
     /// The iPhone's Mic Mode while recording (nil when not). Apps can't set it, only read it:
     /// anything but Standard processes the sound before Phomic gets it, so the live screen
     /// warns about it (`processingMicMode`).
-    private(set) var micMode: AVCaptureDevice.MicrophoneMode?
+    private(set) var micMode: MicMode?
     var pairingPrompt: PairingPrompt?
     private(set) var savedPairings: [SavedPairing] = []
     var lastError: String?
@@ -835,20 +835,33 @@ final class MicController {
         // The Mic Mode changes rarely: look once a second (levels come 20 times a second).
         levelUpdates &+= 1
         if micMode == nil || levelUpdates % 20 == 0 {
-            let mode = AVCaptureDevice.activeMicrophoneMode
+            let mode = MicMode(chosen: AVCaptureDevice.preferredMicrophoneMode,
+                               active: AVCaptureDevice.activeMicrophoneMode)
             if mode != micMode {
+                Self.log.notice("Mic Mode: chosen \(mode.chosen.rawValue, privacy: .public), active \(mode.active.rawValue, privacy: .public)")
                 micMode = mode
             }
         }
     }
 
-    /// The Mic Mode's name when it isn't Standard (it processes the sound then), else nil.
+    /// What the user chose in Mic Mode (Control Center, per app), and what's processing the sound
+    /// now. The SDK has no value for Automatic: with it, iOS reports both as the mode it's using at
+    /// the moment (Voice Isolation came back as 2 and 2 on iOS 27.2.1), so Automatic while it uses
+    /// Standard can't be told from Standard. The warning comes once it switches.
+    struct MicMode: Equatable {
+        let chosen: AVCaptureDevice.MicrophoneMode
+        let active: AVCaptureDevice.MicrophoneMode
+    }
+
+    /// The warning's title while the Mic Mode isn't Standard ("Voice Isolation is on"), else nil.
     var processingMicMode: String? {
-        switch micMode {
-        case nil, .standard?: nil
-        case .voiceIsolation?: "Voice Isolation"
-        case .wideSpectrum?: "Wide Spectrum"
-        default: "A Mic Mode"
+        guard let micMode else { return nil }
+        let mode = micMode.active != .standard ? micMode.active : micMode.chosen
+        switch mode {
+        case .standard: return nil
+        case .voiceIsolation: return "Voice Isolation is on"
+        case .wideSpectrum: return "Wide Spectrum is on"
+        @unknown default: return "Mic Mode isn't Standard"
         }
     }
 

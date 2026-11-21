@@ -330,7 +330,7 @@ private extension View {
 /// can't change that themselves, so this stays as long as it's so; the button opens the system's
 /// Mic Mode menu, where Standard turns it off.
 private struct MicModeWarning: View {
-    let mode: String
+    let title: String
     let turnOff: () -> Void
 
     var body: some View {
@@ -340,7 +340,7 @@ private struct MicModeWarning: View {
                 .foregroundStyle(.orange)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
-                Text("\(mode) is on")
+                Text(title)
                     .font(.subheadline.weight(.semibold))
                 Text("Choose Standard for unprocessed sound.")
                     .font(.footnote)
@@ -365,8 +365,8 @@ private struct LiveView: View {
     var body: some View {
         VStack(spacing: 0) {
             VStack(spacing: 24) {
-                if let mode = model.processingMicMode {
-                    MicModeWarning(mode: mode) {
+                if let title = model.processingMicMode {
+                    MicModeWarning(title: title) {
                         model.showSystemMicModes()
                     }
                     .transition(.opacity)
