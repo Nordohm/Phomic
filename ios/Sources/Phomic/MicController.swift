@@ -845,9 +845,7 @@ final class MicController {
     }
 
     /// What the user chose in Mic Mode (Control Center, per app), and what's processing the sound
-    /// now. The SDK has no value for Automatic: with it, iOS reports both as the mode it's using at
-    /// the moment (Voice Isolation came back as 2 and 2 on iOS 27.2.1), so Automatic while it uses
-    /// Standard can't be told from Standard. The warning comes once it switches.
+    /// now. The SDK has no value for Automatic: with it chosen, both read Standard (iOS 27.2.1).
     struct MicMode: Equatable {
         let chosen: AVCaptureDevice.MicrophoneMode
         let active: AVCaptureDevice.MicrophoneMode
