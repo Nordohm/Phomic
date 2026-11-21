@@ -835,7 +835,7 @@ private struct WiFiComputers: View {
                     }
                 }
                 if model.servers.isEmpty {
-                    GetWindowsAppCard()
+                    GetPCAppCard()
                 }
             }
             NavigationLink {
@@ -852,7 +852,7 @@ private struct WiFiComputers: View {
 /// where the PCs would be, like theirs. In the lists it comes after a few seconds of finding
 /// none, so a PC that shows up at once never has it next to it; on USB nothing shows up, so it's
 /// there at once (`delayed: false`).
-private struct GetWindowsAppCard: View {
+private struct GetPCAppCard: View {
     private let delayed: Bool
     @State private var shown: Bool
 
@@ -867,7 +867,7 @@ private struct GetWindowsAppCard: View {
                 Link(destination: URL(string: "https://nordohm.com/Phomic")!) {
                     HStack(spacing: 14) {
                         PCTile()
-                        Text("Get Phomic for Windows")
+                        Text("Get Phomic for PC")
                             .font(.body.weight(.medium))
                             .foregroundStyle(.primary)
                         Spacer(minLength: 8)
@@ -907,7 +907,7 @@ private struct BluetoothComputers: View {
                     }
                 }
                 if model.nearbyPCs.isEmpty {
-                    GetWindowsAppCard()
+                    GetPCAppCard()
                 }
             }
         }
@@ -945,7 +945,7 @@ private struct UsbWaiting: View {
                 .glassButton(prominent: true)
                 .controlSize(.large)
             } else {
-                GetWindowsAppCard(delayed: false)
+                GetPCAppCard(delayed: false)
             }
         }
         .frame(maxWidth: .infinity)
@@ -1095,7 +1095,7 @@ private struct SettingsView: View {
                 }
 
                 Section {
-                    Link("Send Feedback", destination: feedbackURL)
+                    Link("Give Feedback", destination: feedbackURL)
                         .accessibilityHint("Opens a new issue on GitHub")
                     NavigationLink("Acknowledgements") {
                         AcknowledgementsView()

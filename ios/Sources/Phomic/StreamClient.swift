@@ -2,7 +2,7 @@ import Foundation
 import Network
 import os
 
-/// Talks to the Windows app: a TCP control connection (hello / pings / mute / bye)
+/// Talks to the PC app: a TCP control connection (hello / pings / mute / bye)
 /// plus a UDP flow that carries the audio packets.
 ///
 /// Over USB (`adopt`) there's only the TCP connection, which the PC opened through the
@@ -348,7 +348,7 @@ final class StreamClient: @unchecked Sendable {
         case .posix(.ECONNREFUSED):
             return "The PC refused the connection. Is Phomic open on it?"
         case .posix(.ETIMEDOUT):
-            return "Timed out. Check that both devices are on the same Wi-Fi and that Windows Firewall allows Phomic."
+            return "Timed out. Check that both devices are on the same Wi-Fi and that the PC's firewall allows Phomic."
         case .posix(.ENETUNREACH), .posix(.EHOSTUNREACH):
             return "The PC isn't reachable from this network."
         case .dns(let code) where code == -65570: // kDNSServiceErr_PolicyDenied

@@ -11,7 +11,7 @@ Phomic makes your iPhone a microphone for your own Windows PC. It doesn't collec
   contains nothing about you or your audio, and Phomic stores nothing about it; like any web request, it shows the
   server your IP address. When you click *Update*, the PC app downloads the new installer from GitHub the same way.
   (The PC app also opens web pages in your browser when you click a link in it.)
-- **Feedback:** *Send feedback* (in the PC app's window, and in the iPhone app's Settings) opens a new issue on
+- **Feedback:** *Give feedback* (in the PC app's window, and in the iPhone app's Settings) opens a new issue on
   GitHub in your browser, with the app's version and your system's version filled in. Nothing is sent unless you
   submit it there, and issues on GitHub are public.
 - **Settings stay on your devices.** On the iPhone, Phomic keeps its own settings (for example saved pairing codes

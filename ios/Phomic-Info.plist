@@ -5,7 +5,7 @@
     <key>CFBundleDisplayName</key>
     <string>Phomic</string>
     <key>NSMicrophoneUsageDescription</key>
-    <string>Phomic streams your iPhone's microphone to your Windows PC.</string>
+    <string>Phomic streams your iPhone's microphone to your PC.</string>
     <key>NSLocalNetworkUsageDescription</key>
     <string>Phomic finds and connects to the Phomic app on computers on your local network.</string>
     <key>NSBluetoothAlwaysUsageDescription</key>

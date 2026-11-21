@@ -162,7 +162,7 @@ need to create a project in Visual Studio; it's already in `windows/`.
   `PHOMIC_UPDATE_DRY_RUN=1` stops before running the installer.
 - *Show details* under *Connection* lists the stream (link, audio format, packets and loss, buffer,
   interruptions) while an iPhone is connected, and this PC's name, addresses, port and Bluetooth state.
-- *Send feedback* in the footer opens a new issue on GitHub with the feedback form
+- *Give feedback* in the footer opens a new issue on GitHub with the feedback form
   (`.github/ISSUE_TEMPLATE/feedback.yml`), Phomic's version and Windows' filled in. The form's `app` and `device`
   ids are what the link fills, in both apps.
 - Icon: an iPhone as the capsule of a microphone, drawn on a 24-pixel grid so it stays readable at taskbar size.
@@ -240,11 +240,11 @@ iOS asks for **Microphone**, **Local Network** (Wi-Fi) and **Bluetooth** (only w
 - **Pairing code:** a lock icon marks PCs that require one. Phomic asks for it the first time, or again after a *New code*.
   *Settings* (gear icon) lists them under *Paired PCs*: swipe one to forget it, or *Forget All PCs*.
 - **No PC yet:** after 5 s without a PC (on the USB tab at once, while waiting), a card where the PCs would be,
-  *Get Phomic for Windows*, opens nordohm.com/Phomic (`GetWindowsAppCard`).
+  *Get Phomic for PC*, opens nordohm.com/Phomic (`GetPCAppCard`).
 - **Errors** ("Another connection took over on the PC.") come down like a notification, just under the top bar so
   the gear stays free, on every tab and the live screen (`ErrorBanner`, fed by `MicController.lastError`). Swipe
   one up or close it; the next attempt to connect clears it too.
-- **Feedback:** *Send Feedback* in *Settings* opens a new issue on GitHub with the feedback form
+- **Feedback:** *Give Feedback* in *Settings* opens a new issue on GitHub with the feedback form
   (`.github/ISSUE_TEMPLATE/feedback.yml`), the app's version and the iPhone's iOS version and model filled in.
 - **Version:** at the bottom of *Settings*, read from the app's Info.plist, so it's always the installed one
   (`MARKETING_VERSION` on App Store builds).

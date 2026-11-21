@@ -1,6 +1,6 @@
 import Foundation
 
-/// Wire protocol shared with the Windows app (see docs/protocols.md).
+/// Wire protocol shared with the PC app (see docs/protocols.md).
 ///
 /// Control: TCP, one UTF-8 JSON object per line.
 /// Audio:   UDP datagrams, little-endian:
