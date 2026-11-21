@@ -93,8 +93,10 @@ final class MicController {
     private(set) var bluetoothSampleRate: Int?
     /// Meter position 0...1 (-60 dBFS ... 0 dBFS).
     private(set) var level: Float = 0
-    /// The iPhone's Mic Mode (Standard or Voice Isolation) while recording.
-    private(set) var systemMicMode: String?
+    /// The iPhone's Mic Mode while recording (nil when not). Apps can't set it, only read it:
+    /// anything but Standard processes the sound before Phomic gets it, so the live screen
+    /// warns about it (`processingMicMode`).
+    private(set) var micMode: AVCaptureDevice.MicrophoneMode?
     var pairingPrompt: PairingPrompt?
     private(set) var savedPairings: [SavedPairing] = []
     var lastError: String?
@@ -151,10 +153,6 @@ final class MicController {
     }
 
     var isActive: Bool { phase != .idle }
-
-    var canShowMicModes: Bool {
-        capture.isCapturing
-    }
 
     private let client: StreamClient
     private let bluetooth: BluetoothLink
@@ -328,6 +326,7 @@ final class MicController {
         stopAll()
     }
 
+    /// The system's Mic Mode menu (it only opens while the microphone records).
     func showSystemMicModes() {
         AVCaptureDevice.showSystemUserInterface(.microphoneModes)
     }
@@ -486,7 +485,7 @@ final class MicController {
         }
         if !capture.isCapturing {
             level = 0
-            systemMicMode = nil
+            micMode = nil
         }
     }
 
@@ -743,7 +742,7 @@ final class MicController {
         level = 0
         roundTripMs = nil
         bluetoothSampleRate = nil
-        systemMicMode = nil
+        micMode = nil
     }
 
     /// Scan for PCs over Bluetooth only while that list is on screen.
@@ -835,20 +834,21 @@ final class MicController {
         level = max(0, min(1, (db + 60) / 60))
         // The Mic Mode changes rarely: look once a second (levels come 20 times a second).
         levelUpdates &+= 1
-        if systemMicMode == nil || levelUpdates % 20 == 0 {
-            let mode = Self.describe(AVCaptureDevice.activeMicrophoneMode)
-            if mode != systemMicMode {
-                systemMicMode = mode
+        if micMode == nil || levelUpdates % 20 == 0 {
+            let mode = AVCaptureDevice.activeMicrophoneMode
+            if mode != micMode {
+                micMode = mode
             }
         }
     }
 
-    private static func describe(_ mode: AVCaptureDevice.MicrophoneMode) -> String {
-        switch mode {
-        case .standard: "Standard"
-        case .voiceIsolation: "Voice Isolation"
-        case .wideSpectrum: "Wide Spectrum"
-        @unknown default: "Other"
+    /// The Mic Mode's name when it isn't Standard (it processes the sound then), else nil.
+    var processingMicMode: String? {
+        switch micMode {
+        case nil, .standard?: nil
+        case .voiceIsolation?: "Voice Isolation"
+        case .wideSpectrum?: "Wide Spectrum"
+        default: "A Mic Mode"
         }
     }
 

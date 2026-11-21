@@ -248,11 +248,13 @@ iOS asks for **Microphone**, **Local Network** (Wi-Fi) and **Bluetooth** (only w
   orange dot disappears). Phomic keeps silent, mixable playback
   running so iOS doesn't suspend it, and your music isn't interrupted.
 - **Processing:** Phomic records the microphone raw (RemoteIO, measurement mode, no automatic gain) and adds no
-  processing of its own. The iPhone's **Mic Mode** decides: *Standard* (unprocessed) or *Voice Isolation* (removes
-  background noise). iOS offers *Wide Spectrum* only in call apps such as FaceTime, where *Standard* is processed for
-  calls; in a recording app like Phomic, *Standard* already keeps everything. Change it in Control Center, or with the *Mic Mode* button under the
-  mute button while live, which opens the system picker. Apps can only read the setting, not change it. For a gate, compressor or noise
-  suppression beyond that, use what Discord, Teams or OBS already have on the PC.
+  processing of its own: what processing there is belongs on the PC. The iPhone's **Mic Mode** is set per app in
+  Control Center, and in a recording app like Phomic *Standard* keeps everything (iOS offers *Wide Spectrum* only
+  in call apps such as FaceTime, where *Standard* is processed for calls). Apps can only read it, not set it, and
+  there's no way to opt out of it (no API or Info.plist key in the iOS 27.2 SDK). So while live, if it's anything
+  but *Standard* (`AVCaptureDevice.activeMicrophoneMode`, read once a second), the live screen shows a warning
+  that can't be closed, *Voice Isolation is on*, with *Turn Off*: it opens the system's Mic Mode menu, which only
+  opens while the microphone records.
 - **Live Activity:** while connected, the lock screen and Dynamic Island show *Live* (green), *Muted* (red) or
   *Reconnecting…*, with the PC's name and Wi-Fi, Bluetooth or USB. Swiping Phomic away in the app switcher ends it.
   (It has no stale date: iOS rations Live Activity updates from apps in the background and drops the rest, so a

@@ -326,31 +326,73 @@ private extension View {
 
 // MARK: - Live session
 
+/// The iPhone's Mic Mode isn't Standard, so iOS processes the sound before Phomic sends it. Apps
+/// can't change that themselves, so this stays as long as it's so; the button opens the system's
+/// Mic Mode menu, where Standard turns it off.
+private struct MicModeWarning: View {
+    let mode: String
+    let turnOff: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.title3)
+                .foregroundStyle(.orange)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(mode) is on")
+                    .font(.subheadline.weight(.semibold))
+                Text("Choose Standard for unprocessed sound.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityElement(children: .combine)
+            Button("Turn Off", action: turnOff)
+                .glassButton()
+                .accessibilityHint("Opens Mic Mode")
+        }
+        .padding(.leading, 14)
+        .padding(.trailing, 10)
+        .padding(.vertical, 10)
+        .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+}
+
 private struct LiveView: View {
     @Environment(MicController.self) private var model
 
     var body: some View {
         VStack(spacing: 0) {
-            VStack(spacing: 8) {
-                Text(title)
-                    .font(.title2.weight(.semibold))
-                    .multilineTextAlignment(.center)
-                if let chip {
-                    Label(chip, systemImage: "desktopcomputer")
-                        .font(.footnote.weight(.medium))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .background(Color(.tertiarySystemFill), in: Capsule())
+            VStack(spacing: 24) {
+                if let mode = model.processingMicMode {
+                    MicModeWarning(mode: mode) {
+                        model.showSystemMicModes()
+                    }
+                    .transition(.opacity)
                 }
-                if let note {
-                    Text(note)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                VStack(spacing: 8) {
+                    Text(title)
+                        .font(.title2.weight(.semibold))
                         .multilineTextAlignment(.center)
+                    if let chip {
+                        Label(chip, systemImage: "desktopcomputer")
+                            .font(.footnote.weight(.medium))
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(Color(.tertiarySystemFill), in: Capsule())
+                    }
+                    if let note {
+                        Text(note)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
                 }
+                .accessibilityElement(children: .combine)
             }
-            .accessibilityElement(children: .combine)
+            .animation(.snappy, value: model.processingMicMode)
             .frame(maxHeight: .infinity, alignment: .bottom)
             .padding(.bottom, 32)
 
@@ -360,17 +402,6 @@ private struct LiveView: View {
             }
 
             VStack(spacing: 18) {
-                // The iPhone's Mic Mode (Standard or Voice Isolation): opens the system picker.
-                Button {
-                    model.showSystemMicModes()
-                } label: {
-                    Label(model.systemMicMode ?? "Mic Mode", systemImage: "waveform")
-                        .font(.subheadline.weight(.medium))
-                }
-                .glassButton()
-                .disabled(!model.canShowMicModes)
-                .accessibilityLabel("Processing: \(model.systemMicMode ?? "not recording")")
-
                 if model.transport == .usb {
                     // A cable is plugged in or not: no Disconnect, like a wired microphone.
                     if isStreaming {
@@ -379,7 +410,6 @@ private struct LiveView: View {
                             .foregroundStyle(.secondary)
                     }
                 } else {
-                    // Plain, not glass: glass is for the iPhone's own Mic Mode button above.
                     Button("Disconnect", role: .destructive) {
                         model.disconnect()
                     }
