@@ -255,7 +255,9 @@ iOS asks for **Microphone**, **Local Network** (Wi-Fi) and **Bluetooth** (only w
   but *Standard* (`AVCaptureDevice.activeMicrophoneMode` and `preferredMicrophoneMode`, read once a second), the
   live screen shows a warning that can't be closed, *Voice Isolation is on*, with *Turn Off*: it opens the system's
   Mic Mode menu, which only opens while the microphone records. *Automatic* has no value of its own in the SDK:
-  with it chosen, both read *Standard*, so it gets no warning.
+  with it chosen, both read *Standard*, so it gets no warning. Instead, the first time live with Mic Mode reading
+  *Standard*, a reminder says once *Check Mic Mode: Choose Standard for unprocessed sound.*, with *Open*; closing
+  it or opening Mic Mode from it puts it away for good (`micModeReminderSeen` in the app's settings).
 - **Live Activity:** while connected, the lock screen and Dynamic Island show *Live* (green), *Muted* (red) or
   *Reconnecting…*, with the PC's name and Wi-Fi, Bluetooth or USB. Swiping Phomic away in the app switcher ends it.
   (It has no stale date: iOS rations Live Activity updates from apps in the background and drops the rest, so a

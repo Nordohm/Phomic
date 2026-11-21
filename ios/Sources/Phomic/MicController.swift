@@ -97,6 +97,8 @@ final class MicController {
     /// anything but Standard processes the sound before Phomic gets it, so the live screen
     /// warns about it (`processingMicMode`).
     private(set) var micMode: MicMode?
+    /// Closed (or used) once: the reminder to choose Standard in Mic Mode doesn't come back.
+    private(set) var micModeReminderSeen = UserDefaults.standard.bool(forKey: Keys.micModeReminderSeen)
     var pairingPrompt: PairingPrompt?
     private(set) var savedPairings: [SavedPairing] = []
     var lastError: String?
@@ -185,6 +187,7 @@ final class MicController {
         static let pairingCodes = "pairingCodes"
         static let pairingNames = "pairingNames"
         static let liveActivity = "liveActivity"
+        static let micModeReminderSeen = "micModeReminderSeen"
     }
 
     init() {
@@ -849,6 +852,18 @@ final class MicController {
     struct MicMode: Equatable {
         let chosen: AVCaptureDevice.MicrophoneMode
         let active: AVCaptureDevice.MicrophoneMode
+    }
+
+    /// The first time live with Mic Mode reading Standard: Automatic reads the same and can't be
+    /// told from it, so say once which one to choose. Not while the warning is up.
+    var showsMicModeReminder: Bool {
+        guard !micModeReminderSeen, case .streaming = phase, let micMode else { return false }
+        return micMode.chosen == .standard && micMode.active == .standard
+    }
+
+    func dismissMicModeReminder() {
+        micModeReminderSeen = true
+        UserDefaults.standard.set(true, forKey: Keys.micModeReminderSeen)
     }
 
     /// The warning's title while the Mic Mode isn't Standard ("Voice Isolation is on"), else nil.

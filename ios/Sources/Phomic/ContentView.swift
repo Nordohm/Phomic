@@ -359,6 +359,47 @@ private struct MicModeWarning: View {
     }
 }
 
+/// Once, the first time live: Mic Mode reads Standard, but Automatic reads the same, so this says
+/// which one to choose. Closing it, or opening Mic Mode from it, puts it away for good.
+private struct MicModeReminder: View {
+    let open: () -> Void
+    let close: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "waveform")
+                .font(.title3)
+                .foregroundStyle(.tint)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Check Mic Mode")
+                    .font(.subheadline.weight(.semibold))
+                Text("Choose Standard for unprocessed sound.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityElement(children: .combine)
+            Button("Open", action: open)
+                .glassButton()
+                .accessibilityHint("Opens Mic Mode")
+            Button(action: close) {
+                Image(systemName: "xmark")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 32, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Close")
+        }
+        .padding(.leading, 14)
+        .padding(.trailing, 4)
+        .padding(.vertical, 6)
+        .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+}
+
 private struct LiveView: View {
     @Environment(MicController.self) private var model
 
@@ -368,6 +409,14 @@ private struct LiveView: View {
                 if let title = model.processingMicMode {
                     MicModeWarning(title: title) {
                         model.showSystemMicModes()
+                    }
+                    .transition(.opacity)
+                } else if model.showsMicModeReminder {
+                    MicModeReminder {
+                        model.showSystemMicModes()
+                        model.dismissMicModeReminder()
+                    } close: {
+                        model.dismissMicModeReminder()
                     }
                     .transition(.opacity)
                 }
@@ -393,6 +442,7 @@ private struct LiveView: View {
                 .accessibilityElement(children: .combine)
             }
             .animation(.snappy, value: model.processingMicMode)
+            .animation(.snappy, value: model.showsMicModeReminder)
             .frame(maxHeight: .infinity, alignment: .bottom)
             .padding(.bottom, 32)
 
