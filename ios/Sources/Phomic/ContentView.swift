@@ -31,9 +31,6 @@ struct ContentView: View {
             }
         }
         .sensoryFeedback(.selection, trigger: model.preferredTransport)
-        .overlay(alignment: .top) {
-            ErrorBanner()
-        }
         .sheet(isPresented: $showSettings) {
             SettingsView()
         }
@@ -110,36 +107,41 @@ private struct ConnectionScreen: View {
             GeometryReader { screen in
                 let margin = max(screen.safeAreaInsets.top, screen.safeAreaInsets.bottom)
                 let height = max(0, screen.size.height - 2 * margin)
-                ScrollView {
-                    VStack(spacing: 24) {
-                        Group {
-                            if model.isActive {
-                                LiveView()
-                                    .frame(height: max(0, height - Self.verticalPadding))
-                            } else {
-                                if let version = updates.available {
-                                    UpdateCard(version: version)
-                                        .transition(.opacity)
-                                }
-                                switch transport {
-                                case .wifi:
-                                    WiFiComputers()
-                                case .bluetooth:
-                                    BluetoothComputers()
-                                case .usb:
-                                    UsbWaiting()
+                ZStack(alignment: .top) {
+                    ScrollView {
+                        VStack(spacing: 24) {
+                            Group {
+                                if model.isActive {
+                                    LiveView()
+                                        .frame(height: max(0, height - Self.verticalPadding))
+                                } else {
+                                    if let version = updates.available {
+                                        UpdateCard(version: version)
+                                            .transition(.opacity)
+                                    }
+                                    switch transport {
+                                    case .wifi:
+                                        WiFiComputers()
+                                    case .bluetooth:
+                                        BluetoothComputers()
+                                    case .usb:
+                                        UsbWaiting()
+                                    }
                                 }
                             }
+                            .transition(.opacity)
                         }
-                        .transition(.opacity)
+                        .padding(.horizontal, 20)
+                        .padding(.top, model.isActive ? 0 : (height * Self.headingAt).rounded())
+                        .padding(.vertical, Self.verticalPadding / 2)
+                        .frame(minHeight: height, alignment: model.isActive ? .center : .top)
+                        .padding(.vertical, margin)
+                        .animation(.snappy, value: model.isActive)
+                        .animation(.snappy, value: updates.available)
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.top, model.isActive ? 0 : (height * Self.headingAt).rounded())
-                    .padding(.vertical, Self.verticalPadding / 2)
-                    .frame(minHeight: height, alignment: model.isActive ? .center : .top)
-                    .padding(.vertical, margin)
-                    .animation(.snappy, value: model.isActive)
-                    .animation(.snappy, value: updates.available)
+                    // Under the top bar, so Settings stays in reach.
+                    ErrorBanner()
+                        .padding(.top, screen.safeAreaInsets.top + 4)
                 }
             }
             // The whole screen, so `screen` knows the bars; the margins above keep content clear
@@ -244,8 +246,9 @@ private struct UpdateCard: View {
     }
 }
 
-/// MicController's last error, at the top of the screen like a notification, over every tab and
-/// the live screen. It stays until it's swiped up or closed, or the next attempt clears it.
+/// MicController's last error, at the top of the screen like a notification (just under the top
+/// bar, which keeps Settings), on every tab and the live screen. It stays until it's swiped up or
+/// closed, or the next attempt clears it.
 private struct ErrorBanner: View {
     @Environment(MicController.self) private var model
 
@@ -846,10 +849,17 @@ private struct WiFiComputers: View {
 }
 
 /// Where to get the PC app, for whoever finds no PC because it isn't installed yet: a card
-/// where the PCs would be, like theirs. It comes after a few seconds of finding none, so a PC
-/// that shows up at once never has it next to it.
+/// where the PCs would be, like theirs. In the lists it comes after a few seconds of finding
+/// none, so a PC that shows up at once never has it next to it; on USB nothing shows up, so it's
+/// there at once (`delayed: false`).
 private struct GetWindowsAppCard: View {
-    @State private var shown = false
+    private let delayed: Bool
+    @State private var shown: Bool
+
+    init(delayed: Bool = true) {
+        self.delayed = delayed
+        _shown = State(initialValue: !delayed)
+    }
 
     var body: some View {
         ZStack {
@@ -875,6 +885,7 @@ private struct GetWindowsAppCard: View {
             }
         }
         .task {
+            guard delayed else { return }
             try? await Task.sleep(for: .seconds(5))
             withAnimation(.snappy) { shown = true }
         }
@@ -934,7 +945,7 @@ private struct UsbWaiting: View {
                 .glassButton(prominent: true)
                 .controlSize(.large)
             } else {
-                GetWindowsAppCard()
+                GetWindowsAppCard(delayed: false)
             }
         }
         .frame(maxWidth: .infinity)
