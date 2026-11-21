@@ -232,8 +232,8 @@ iOS asks for **Microphone**, **Local Network** (Wi-Fi) and **Bluetooth** (only w
   and plugging back in resumes it.
 - **Pairing code:** a lock icon marks PCs that require one. Phomic asks for it the first time, or again after a *New code*.
   *Settings* (gear icon) lists them under *Paired PCs*: swipe one to forget it, or *Forget All PCs*.
-- **No PC yet:** while no PC shows up (and on the USB tab while it waits), *Get Phomic for Windows* opens
-  nordohm.com/Phomic.
+- **No PC yet:** after 5 s without a PC (and on the USB tab, 5 s into waiting), a card where the PCs would be,
+  *Get Phomic for Windows*, opens nordohm.com/Phomic (`GetWindowsAppCard`).
 - **Errors** ("Another connection took over on the PC.") come down from the top like a notification, over every
   tab and the live screen (`ErrorBanner`, fed by `MicController.lastError`). Swipe one up or close it; the next
   attempt to connect clears it too.

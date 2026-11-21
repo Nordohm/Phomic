@@ -826,6 +826,9 @@ private struct WiFiComputers: View {
                         model.connect(to: server)
                     }
                 }
+                if model.servers.isEmpty {
+                    GetWindowsAppCard()
+                }
             }
             NavigationLink {
                 ManualConnectView()
@@ -833,21 +836,48 @@ private struct WiFiComputers: View {
                 Label("Connect by Address", systemImage: "keyboard")
                     .font(.subheadline.weight(.medium))
             }
-            if model.servers.isEmpty {
-                GetWindowsAppLink()
-            }
         }
     }
 }
 
-/// Where to get the PC app, for whoever finds no PC because it isn't installed yet.
-private struct GetWindowsAppLink: View {
+/// Where to get the PC app, for whoever finds no PC because it isn't installed yet: a card
+/// where the PCs would be, like theirs. It comes after a few seconds of finding none, so a PC
+/// that shows up at once never has it next to it.
+private struct GetWindowsAppCard: View {
+    @State private var shown = false
+
     var body: some View {
-        Link(destination: URL(string: "https://nordohm.com/Phomic")!) {
-            Label("Get Phomic for Windows", systemImage: "arrow.up.right.square")
-                .font(.subheadline.weight(.medium))
+        ZStack {
+            if shown {
+                Link(destination: URL(string: "https://nordohm.com/Phomic")!) {
+                    HStack(spacing: 14) {
+                        Image(systemName: "desktopcomputer")
+                            .font(.system(size: 18, weight: .medium))
+                            .foregroundStyle(Color.accentColor)
+                            .frame(width: 40, height: 40)
+                            .background(Color.accentColor.opacity(0.12),
+                                        in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        Text("Get Phomic for Windows")
+                            .font(.body.weight(.medium))
+                            .foregroundStyle(.primary)
+                        Spacer(minLength: 8)
+                        Image(systemName: "arrow.up.right")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(.tertiary)
+                            .accessibilityHidden(true)
+                    }
+                    .card()
+                    .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                }
+                .buttonStyle(PressableStyle())
+                .accessibilityHint("Opens nordohm.com/Phomic")
+                .transition(.opacity)
+            }
         }
-        .accessibilityHint("Opens nordohm.com/Phomic")
+        .task {
+            try? await Task.sleep(for: .seconds(5))
+            withAnimation(.snappy) { shown = true }
+        }
     }
 }
 
@@ -865,9 +895,9 @@ private struct BluetoothComputers: View {
                         model.connect(to: pc)
                     }
                 }
-            }
-            if model.nearbyPCs.isEmpty {
-                GetWindowsAppLink()
+                if model.nearbyPCs.isEmpty {
+                    GetWindowsAppCard()
+                }
             }
         }
     }
@@ -899,7 +929,7 @@ private struct UsbWaiting: View {
                 .glassButton(prominent: true)
                 .controlSize(.large)
             } else {
-                GetWindowsAppLink()
+                GetWindowsAppCard()
             }
         }
         .frame(maxWidth: .infinity)
