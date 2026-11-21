@@ -3,7 +3,7 @@
 #
 # Day to day the app is built with xtool (Package.swift + xtool.yml). This project compiles the
 # same sources as a regular Xcode app with a widget extension, so Xcode adds what App Store
-# Connect wants: the icon in an asset catalog, App Intents metadata it generates itself, and
+# Connect wants: the icon built from its layers, App Intents metadata it generates itself, and
 # the Xcode/SDK build info. COpus and PhomicActivity come from the Swift package.
 name: Phomic
 options:
@@ -27,7 +27,7 @@ targets:
       - path: ../Sources/Phomic
       - path: ../Resources/PrivacyInfo.xcprivacy
         buildPhase: resources
-      - path: Assets.xcassets # made by Tools/xcode-project.sh from Resources/AppIcon.png
+      - path: ../Resources/AppIcon.icon # the icon in layers (Icon Composer's format), built by Xcode
         buildPhase: resources
     dependencies:
       - target: PhomicWidgetExtension

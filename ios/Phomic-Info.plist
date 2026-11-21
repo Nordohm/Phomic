@@ -23,6 +23,20 @@
     <true/>
     <key>NSSupportsLiveActivities</key>
     <true/>
+    <!-- The icon: "AppIcon" in Assets.car (the icon in layers), and the plain picture for where
+         that isn't read. Both are built from Resources/AppIcon.icon; see xtool.yml. -->
+    <key>CFBundleIcons</key>
+    <dict>
+        <key>CFBundlePrimaryIcon</key>
+        <dict>
+            <key>CFBundleIconFiles</key>
+            <array>
+                <string>AppIcon60x60</string>
+            </array>
+            <key>CFBundleIconName</key>
+            <string>AppIcon</string>
+        </dict>
+    </dict>
     <!-- No encryption beyond what iOS itself provides (App Store export compliance). -->
     <key>ITSAppUsesNonExemptEncryption</key>
     <false/>

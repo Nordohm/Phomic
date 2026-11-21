@@ -1,0 +1,66 @@
+# Builds the iPhone app's icon in layers (ios/Resources/AppIcon.icon) into the file an app carries
+# it in, Assets.car, on one of GitHub's Macs. Only Xcode's actool can make that file, and the builds
+# made with xtool on Linux or Windows need it ready-made: it's kept as the artifact "app-icon", to
+# be put in ios/Resources/ (docs/development.md, "The icon"). Runs when the icon changes and from
+# the Actions tab ("App icon" > Run workflow).
+name: App icon
+
+on:
+  push:
+    paths:
+      - ios/Resources/AppIcon.icon/**
+      - .github/workflows/icon.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  icon:
+    # The same Mac as the app's own build (ios.yml).
+    runs-on: xcode-27
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Use the newest Xcode
+        run: |
+          xcode=$(ls -d /Applications/Xcode_*.app | grep -v -i -E 'beta|release_candidate|_rc' | sort -V | tail -1)
+          sudo xcode-select -s "$xcode"
+          xcodebuild -version
+
+      - name: Build the icon
+        run: |
+          mkdir -p "$RUNNER_TEMP/icon"
+          xcrun actool ios/Resources/AppIcon.icon --compile "$RUNNER_TEMP/icon" --app-icon AppIcon \
+            --platform iphoneos --target-device iphone --minimum-deployment-target 18.0 \
+            --output-partial-info-plist "$RUNNER_TEMP/icon/Info.plist" \
+            --output-format human-readable-text --notices --warnings
+          ls -l "$RUNNER_TEMP/icon"
+          xcrun assetutil --info "$RUNNER_TEMP/icon/Assets.car" | head -80
+          cat "$RUNNER_TEMP/icon/Info.plist"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-icon
+          path: ${{ runner.temp }}/icon
+
+      # Pictures of the icon as the Home Screen draws it, glass and all, in each of its looks:
+      # Icon Composer's own renderer (ictool, inside Xcode). Kept as the artifact "icon-preview".
+      - name: Picture the icon in each look
+        continue-on-error: true
+        run: |
+          ictool="$(dirname "$(xcode-select -p)")/Applications/Icon Composer.app/Contents/Executables/ictool"
+          "$ictool" --version
+          mkdir -p "$RUNNER_TEMP/preview"
+          for look in Default Dark ClearLight ClearDark TintedLight TintedDark; do
+            "$ictool" ios/Resources/AppIcon.icon --export-image --output-file "$RUNNER_TEMP/preview/$look.png" \
+              --platform iOS --rendition "$look" --width 512 --height 512 --scale 1
+          done
+          ls -l "$RUNNER_TEMP/preview"
+
+      - uses: actions/upload-artifact@v4
+        continue-on-error: true
+        with:
+          name: icon-preview
+          path: ${{ runner.temp }}/preview

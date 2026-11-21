@@ -31,6 +31,9 @@ struct ContentView: View {
             }
         }
         .sensoryFeedback(.selection, trigger: model.preferredTransport)
+        .overlay(alignment: .top) {
+            ErrorBanner()
+        }
         .sheet(isPresented: $showSettings) {
             SettingsView()
         }
@@ -114,10 +117,6 @@ private struct ConnectionScreen: View {
                                     UpdateCard(version: version)
                                         .transition(.opacity)
                                 }
-                                if let error = model.lastError {
-                                    ErrorCard(message: error)
-                                        .transition(.opacity)
-                                }
                                 switch transport {
                                 case .wifi:
                                     WiFiComputers()
@@ -135,7 +134,6 @@ private struct ConnectionScreen: View {
                     .frame(minHeight: height)
                     .padding(.vertical, margin)
                     .animation(.snappy, value: model.isActive)
-                    .animation(.snappy, value: model.lastError)
                     .animation(.snappy, value: updates.available)
                 }
             }
@@ -241,20 +239,88 @@ private struct UpdateCard: View {
     }
 }
 
-private struct ErrorCard: View {
-    let message: String
+/// MicController's last error, at the top of the screen like a notification, over every tab and
+/// the live screen. It stays until it's swiped up or closed, or the next attempt clears it.
+private struct ErrorBanner: View {
+    @Environment(MicController.self) private var model
 
     var body: some View {
-        Label {
-            Text(message)
-                .font(.subheadline)
-        } icon: {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(.orange)
+        ZStack {
+            if let message = model.lastError {
+                Banner(message: message) {
+                    model.dismissError()
+                }
+                // A new message is a new banner, with its own drag.
+                .id(message)
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
-        .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .animation(.snappy, value: model.lastError)
+    }
+
+    private struct Banner: View {
+        let message: String
+        let dismiss: () -> Void
+        @State private var drag: CGFloat = 0
+
+        var body: some View {
+            HStack(spacing: 12) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.title3)
+                    .foregroundStyle(.orange)
+                    .accessibilityHidden(true)
+                Text(message)
+                    .font(.subheadline)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Button(action: dismiss) {
+                    Image(systemName: "xmark")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Close")
+            }
+            .padding(.leading, 16)
+            .padding(.trailing, 4)
+            .padding(.vertical, 6)
+            .frame(minHeight: 56)
+            .glassBackground(cornerRadius: 22)
+            .padding(.horizontal, 12)
+            // Follows the finger upwards only; a flick or a short pull up dismisses it.
+            .offset(y: min(0, drag))
+            .gesture(
+                DragGesture(minimumDistance: 8)
+                    .onChanged { drag = $0.translation.height }
+                    .onEnded { value in
+                        if value.translation.height < -30 || value.predictedEndTranslation.height < -80 {
+                            dismiss()
+                        } else {
+                            withAnimation(.snappy) { drag = 0 }
+                        }
+                    }
+            )
+            .accessibilityElement(children: .combine)
+            .accessibilityAction(named: "Close", dismiss)
+            .onAppear {
+                AccessibilityNotification.Announcement(message).post()
+            }
+        }
+    }
+}
+
+private extension View {
+    /// Liquid Glass on iOS 26, a material with a shadow before.
+    @ViewBuilder
+    func glassBackground(cornerRadius: CGFloat) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        if #available(iOS 26, *) {
+            glassEffect(.regular, in: shape)
+        } else {
+            background(.regularMaterial, in: shape)
+                .shadow(color: .black.opacity(0.15), radius: 12, y: 4)
+        }
     }
 }
 
@@ -266,10 +332,6 @@ private struct LiveView: View {
     var body: some View {
         VStack(spacing: 0) {
             VStack(spacing: 8) {
-                if let error = model.lastError {
-                    ErrorCard(message: error)
-                        .padding(.bottom, 8)
-                }
                 Text(title)
                     .font(.title2.weight(.semibold))
                     .multilineTextAlignment(.center)
@@ -691,7 +753,21 @@ private struct WiFiComputers: View {
                 Label("Connect by Address", systemImage: "keyboard")
                     .font(.subheadline.weight(.medium))
             }
+            if model.servers.isEmpty {
+                GetWindowsAppLink()
+            }
         }
+    }
+}
+
+/// Where to get the PC app, for whoever finds no PC because it isn't installed yet.
+private struct GetWindowsAppLink: View {
+    var body: some View {
+        Link(destination: URL(string: "https://nordohm.com/Phomic")!) {
+            Label("Get Phomic for Windows", systemImage: "arrow.up.right.square")
+                .font(.subheadline.weight(.medium))
+        }
+        .accessibilityHint("Opens nordohm.com/Phomic")
     }
 }
 
@@ -709,6 +785,9 @@ private struct BluetoothComputers: View {
                         model.connect(to: pc)
                     }
                 }
+            }
+            if model.nearbyPCs.isEmpty {
+                GetWindowsAppLink()
             }
         }
     }
@@ -739,6 +818,8 @@ private struct UsbWaiting: View {
                 }
                 .glassButton(prominent: true)
                 .controlSize(.large)
+            } else {
+                GetWindowsAppLink()
             }
         }
         .frame(maxWidth: .infinity)
@@ -800,7 +881,7 @@ private struct ManualConnectView: View {
                         .multilineTextAlignment(.trailing)
                 }
             } footer: {
-                Text("In Phomic on the PC, click **Show details** under Connection.")
+                Text("Shown under **Show details** in Phomic on the PC.")
             }
 
             Section {

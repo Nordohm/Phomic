@@ -12,6 +12,9 @@ on:
     branches: [main]
     paths:
       - "ios/**"
+      # (Not the icon as it's built for xtool's builds: Xcode builds its own.)
+      - "!ios/Resources/Assets.car"
+      - "!ios/Resources/AppIcon60x60@2x.png"
       - ".github/workflows/ios.yml"
   workflow_dispatch:
     inputs:

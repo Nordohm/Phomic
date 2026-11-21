@@ -99,6 +99,11 @@ final class MicController {
     private(set) var savedPairings: [SavedPairing] = []
     var lastError: String?
 
+    /// The error banner was swiped away or closed.
+    func dismissError() {
+        lastError = nil
+    }
+
     var isMuted = false {
         didSet {
             guard isMuted != oldValue else { return }

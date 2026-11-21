@@ -2,12 +2,17 @@ version: 1
 bundleID: io.github.nordohm.Phomic
 product: Phomic
 infoPath: Phomic-Info.plist
-iconPath: Resources/AppIcon.png
 # App Intents metadata (made by Tools/appintents-metadata.sh): lets iOS run the
 # Live Activity's mute button. Both bundles contain the intent, so both get it.
 resources:
   - Resources/Metadata.appintents
   - Resources/PrivacyInfo.xcprivacy
+  # The icon in layers (Resources/AppIcon.icon). xtool only takes a flat picture (iconPath),
+  # so these two are built from it by Xcode on GitHub (.github/workflows/icon.yml) and kept
+  # here; Phomic-Info.plist names them. After a change to the icon, put the workflow's
+  # artifact "app-icon" here again (docs/development.md, "The icon").
+  - Resources/Assets.car
+  - Resources/AppIcon60x60@2x.png
 extensions:
   - product: PhomicWidget
     infoPath: PhomicWidget-Info.plist

@@ -158,8 +158,8 @@ need to create a project in Visual Studio; it's already in `windows/`.
 - Icon: an iPhone as the capsule of a microphone, drawn on a 24-pixel grid so it stays readable at taskbar size.
   Windows shows it in two forms: white on a blue squircle like the iPhone app (`PhomicTile.ico`: Explorer, Start,
   taskbar, Alt+Tab, the installer) and the glyph alone (`Phomic.ico`: title bar and tray). Source:
-  `windows/Phomic/Assets/Phomic.svg`; `python windows/make-tile-icon.py` makes `PhomicTile.svg` and `.ico` from it.
-  The iOS app uses `Resources/AppIcon.png` (from `AppIcon.svg`, white on blue, via `iconPath` in `xtool.yml`).
+  `windows/Phomic/Assets/Phomic.svg`, in two groups (`phone` and `stand`); `python make-icons.py` makes both
+  `.ico` files, `PhomicTile.svg` and the iPhone icon's layers from it (see *The icon* under the iOS app).
 
 - **Tests** (`windows/tests/`, Python 3, nothing to install) play the iPhone against the running PC app on the
   same computer, and read its window through UI Automation:
@@ -229,6 +229,11 @@ iOS asks for **Microphone**, **Local Network** (Wi-Fi) and **Bluetooth** (only w
   and plugging back in resumes it.
 - **Pairing code:** a lock icon marks PCs that require one. Phomic asks for it the first time, or again after a *New code*.
   *Settings* (gear icon) lists them under *Paired PCs*: swipe one to forget it, or *Forget All PCs*.
+- **No PC yet:** while no PC shows up (and on the USB tab while it waits), *Get Phomic for Windows* opens
+  nordohm.com/Phomic.
+- **Errors** ("Another connection took over on the PC.") come down from the top like a notification, over every
+  tab and the live screen (`ErrorBanner`, fed by `MicController.lastError`). Swipe one up or close it; the next
+  attempt to connect clears it too.
 - **Version:** at the bottom of *Settings*, read from the app's Info.plist, so it's always the installed one
   (`MARKETING_VERSION` on App Store builds).
 - **Updates:** when the App Store has a newer version, the list of PCs shows a card that opens it (Phomic asks
@@ -260,6 +265,29 @@ iOS asks for **Microphone**, **Local Network** (Wi-Fi) and **Bluetooth** (only w
   `PhomicActivityIntents` (an `AppIntentsPackage`) is how the app and the widget include the intent.
 - **Background:** streaming continues with the screen locked. After a Wi-Fi drop it retries every 2 s; after a
   Bluetooth drop iOS reconnects by itself (background mode `bluetooth-central`); over USB the PC reconnects.
+
+### The icon
+
+The icon is drawn in layers: `ios/Resources/AppIcon.icon`, in Icon Composer's format (the phone and the stand as
+an SVG each, the background as a fill, and `icon.json` that says how they're stacked and that they're glass).
+Layers are what give an icon Liquid Glass of its own in every look the Home Screen has; a single flat picture
+becomes a pale pane in the clear and tinted looks. The SVGs are made by `python make-icons.py` from the drawing
+the Windows app uses; `icon.json` was written by hand, not in Icon Composer (a Mac app). Apple doesn't publish
+its format; others have worked it out ([a schema](https://github.com/giginet/apple-icon-composer-skill),
+[a reference](https://github.com/peterpoliwoda/icon-composer-template)).
+
+Only Xcode's `actool` can build an `.icon` into what an app carries, `Assets.car`:
+
+- **The App Store build** gets it from Xcode: the project has the `.icon` among its resources. For iOS 18 Xcode
+  also makes flat pictures from it.
+- **xtool's builds** can't build it, and xtool itself only takes a flat picture (`iconPath`). So the built files
+  are kept in the repo: `ios/Resources/Assets.car` and `ios/Resources/AppIcon60x60@2x.png` (the plain picture
+  for where the layers aren't read). `xtool.yml` copies them into the app and `Phomic-Info.plist` names them
+  (`CFBundleIcons`).
+
+After changing the icon: push, wait for [`.github/workflows/icon.yml`](../.github/workflows/icon.yml) (it runs
+when `ios/Resources/AppIcon.icon` changes, on any branch), download its artifact `app-icon`, and put its
+`Assets.car` and `AppIcon60x60@2x.png` in `ios/Resources/`.
 
 ### App Store builds (no Mac needed)
 
