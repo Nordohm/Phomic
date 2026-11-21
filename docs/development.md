@@ -155,6 +155,9 @@ need to create a project in Visual Studio; it's already in `windows/`.
   `PHOMIC_UPDATE_DRY_RUN=1` stops before running the installer.
 - *Show details* under *Connection* lists the stream (link, audio format, packets and loss, buffer,
   interruptions) while an iPhone is connected, and this PC's name, addresses, port and Bluetooth state.
+- *Send feedback* in the footer opens a new issue on GitHub with the feedback form
+  (`.github/ISSUE_TEMPLATE/feedback.yml`), Phomic's version and Windows' filled in. The form's `app` and `device`
+  ids are what the link fills, in both apps.
 - Icon: an iPhone as the capsule of a microphone, drawn on a 24-pixel grid so it stays readable at taskbar size.
   Windows shows it in two forms: white on a blue squircle like the iPhone app (`PhomicTile.ico`: Explorer, Start,
   taskbar, Alt+Tab, the installer) and the glyph alone (`Phomic.ico`: title bar and tray). Source:
@@ -234,6 +237,8 @@ iOS asks for **Microphone**, **Local Network** (Wi-Fi) and **Bluetooth** (only w
 - **Errors** ("Another connection took over on the PC.") come down from the top like a notification, over every
   tab and the live screen (`ErrorBanner`, fed by `MicController.lastError`). Swipe one up or close it; the next
   attempt to connect clears it too.
+- **Feedback:** *Send Feedback* in *Settings* opens a new issue on GitHub with the feedback form
+  (`.github/ISSUE_TEMPLATE/feedback.yml`), the app's version and the iPhone's iOS version and model filled in.
 - **Version:** at the bottom of *Settings*, read from the app's Info.plist, so it's always the installed one
   (`MARKETING_VERSION` on App Store builds).
 - **Updates:** when the App Store has a newer version, the list of PCs shows a card that opens it (Phomic asks

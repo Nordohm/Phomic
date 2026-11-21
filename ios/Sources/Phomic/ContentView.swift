@@ -912,6 +912,23 @@ private struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var confirmForgetAll = false
 
+    /// A new issue on GitHub with Phomic's feedback form, this app's version and the iPhone's
+    /// filled in ("iOS 27.2.1, iPhone16,1").
+    private var feedbackURL: URL {
+        var system = utsname()
+        uname(&system)
+        let machine = withUnsafeBytes(of: &system.machine) { bytes in
+            String(decoding: bytes.prefix { $0 != 0 }, as: UTF8.self)
+        }
+        var url = URLComponents(string: "https://github.com/Nordohm/Phomic/issues/new")!
+        url.queryItems = [
+            URLQueryItem(name: "template", value: "feedback.yml"),
+            URLQueryItem(name: "app", value: "iPhone \(Self.version)"),
+            URLQueryItem(name: "device", value: "iOS \(UIDevice.current.systemVersion), \(machine)"),
+        ]
+        return url.url!
+    }
+
     var body: some View {
         @Bindable var model = model
 
@@ -952,6 +969,8 @@ private struct SettingsView: View {
                 }
 
                 Section {
+                    Link("Send Feedback", destination: feedbackURL)
+                        .accessibilityHint("Opens a new issue on GitHub")
                     NavigationLink("Acknowledgements") {
                         AcknowledgementsView()
                     }

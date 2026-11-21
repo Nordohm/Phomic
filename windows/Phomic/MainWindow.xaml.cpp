@@ -128,6 +128,36 @@ namespace
         std::transform(s.begin(), s.end(), s.begin(), [](wchar_t c) { return static_cast<wchar_t>(towlower(c)); });
         return s;
     }
+
+    /// "Windows 11 24H2 (build 26100)", for the feedback form.
+    std::wstring WindowsVersion()
+    {
+        auto read = [](wchar_t const* name)
+        {
+            wchar_t value[64]{};
+            DWORD size = sizeof(value);
+            RegGetValueW(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion", name,
+                         RRF_RT_REG_SZ, nullptr, value, &size);
+            return std::wstring(value);
+        };
+        const std::wstring display = read(L"DisplayVersion");
+        const std::wstring build = read(L"CurrentBuild");
+        // Windows 11 still says "10" in most places; its builds start at 22000.
+        std::wstring out = _wtoi(build.c_str()) >= 22000 ? L"Windows 11" : L"Windows 10";
+        if (!display.empty()) out += L" " + display;
+        if (!build.empty()) out += L" (build " + build + L")";
+        return out;
+    }
+
+    /// A new issue on GitHub with Phomic's feedback form, this app's version and Windows' filled in.
+    winrt::Windows::Foundation::Uri FeedbackUri()
+    {
+        using winrt::Windows::Foundation::Uri;
+        std::wstring url = L"https://github.com/Nordohm/Phomic/issues/new?template=feedback.yml";
+        url += L"&app=" + std::wstring(Uri::EscapeComponent(L"Windows " PHOMIC_VERSION_STRING));
+        url += L"&device=" + std::wstring(Uri::EscapeComponent(WindowsVersion()));
+        return Uri(url);
+    }
 }
 
 namespace winrt::Phomic::implementation
@@ -284,7 +314,8 @@ namespace winrt::Phomic::implementation
             }
         });
 
-        FooterText().Text(L" " PHOMIC_VERSION_STRING L" is free and open source."); // after the "Phomic" link
+        FooterText().Text(L" " PHOMIC_VERSION_STRING L" is free and open source. "); // after the "Phomic" link
+        FeedbackLink().NavigateUri(FeedbackUri());
         ShowAppStoreBadge();
         RootPanel().ActualThemeChanged([weak = get_weak()](auto&&, auto&&)
         {

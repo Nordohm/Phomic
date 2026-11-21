@@ -601,7 +601,7 @@
                         VerticalAlignment="Center"
                         Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                         Style="{StaticResource CaptionTextBlockStyle}"
-                        TextWrapping="Wrap"><Hyperlink NavigateUri="https://nordohm.com/Phomic" UnderlineStyle="None">Phomic</Hyperlink><Run x:Name="FooterText" /></TextBlock>
+                        TextWrapping="Wrap"><Hyperlink NavigateUri="https://nordohm.com/Phomic" UnderlineStyle="None">Phomic</Hyperlink><Run x:Name="FooterText" /><Hyperlink x:Name="FeedbackLink" UnderlineStyle="None">Send feedback</Hyperlink></TextBlock>
                     <HyperlinkButton
                         Grid.Column="1"
                         NavigateUri="https://buymeacoffee.com/nordohm"
