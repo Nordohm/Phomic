@@ -138,6 +138,13 @@ need to create a project in Visual Studio; it's already in `windows/`.
   Starting Phomic again while it runs opens the existing window.
 - The window is 600 logical pixels wide and never taller than its content. It follows the content (for example
   when *Show details* opens) unless you made it shorter yourself.
+- **Noise suppression** (off by default, `Denoiser.h`): [RNNoise](https://github.com/xiph/rnnoise) 0.2, a small
+  neural network, takes background noise out and keeps the voice, what the iPhone's Voice Isolation does, but on
+  the PC: the iPhone sends its microphone unprocessed (its live screen warns when Mic Mode isn't *Standard*). It
+  runs on the audio thread before automatic gain, so gain measures what's left of the background. RNNoise delays
+  the sound by 20 ms, plus 10 ms when the audio device's blocks aren't 10 ms (RNNoise's own size), and takes about
+  2 % of one core (an i5-8600K: 0.16 ms per 10 ms block). Measured with synthetic speech and hiss: hiss alone went
+  from -34 to -108 dBFS, speech stayed at -22 dBFS.
 - **Gain:** the iPhone sends its microphone raw, which is quiet, and how quiet depends on the voice, the distance
   and the Mic Mode. *Automatic gain* (on by default, `AutoGain.h`) keeps speech at an even level, about -23 dBFS:
   it tracks the room's background noise, counts what's clearly above it as speech, turns down quickly when that's

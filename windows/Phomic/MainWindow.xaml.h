@@ -9,6 +9,7 @@
 #include "StreamServer.h"
 #include "UsbReceiver.h"
 #include "AutoGain.h"
+#include "Denoiser.h"
 #include "Limiter.h"
 #include "TrayIcon.h"
 #include "Firewall.h"
@@ -65,6 +66,8 @@ namespace winrt::Phomic::implementation
         void UpdateButton_Click(winrt::Windows::Foundation::IInspectable const& sender,
             winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
         void AutoGainToggle_Toggled(winrt::Windows::Foundation::IInspectable const& sender,
+            winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
+        void NoiseSuppressionToggle_Toggled(winrt::Windows::Foundation::IInspectable const& sender,
             winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
         void WiFiAllowButton_Click(winrt::Windows::Foundation::IInspectable const& sender,
             winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
@@ -180,8 +183,11 @@ namespace winrt::Phomic::implementation
         std::atomic<float> m_gain{ 1.f };          // manual gain (automatic gain off)
         std::atomic<bool> m_autoGainOn{ true };
         std::atomic<float> m_appliedGainDb{ 0.f }; // automatic gain's current gain, for the UI
+        std::atomic<bool> m_noiseSuppressionOn{ false };
         // Audio thread only (the output's source, see InitializeComponent):
         std::unique_ptr<phomic::AutoGain> m_autoGain;
+        std::unique_ptr<phomic::Denoiser> m_denoiser;
+        bool m_denoising = false; // whether m_denoiser ran on the last block
         phomic::Limiter m_limiter;
         void UpdateGain(bool live);
         bool m_initialized = false;

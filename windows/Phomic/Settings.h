@@ -20,6 +20,7 @@ namespace phomic::settings
     inline constexpr wchar_t kManualGainDb[] = L"ManualGainDb";
     inline constexpr wchar_t kAutoGain[] = L"AutoGain";     // 1 = automatic gain (the default)
     inline constexpr wchar_t kAutoGainDb[] = L"AutoGainDb"; // where automatic gain was when Phomic quit
+    inline constexpr wchar_t kNoiseSuppression[] = L"NoiseSuppression"; // 1 = on (off by default)
     inline constexpr wchar_t kBufferMode[] = L"BufferMode"; // 0 = Auto, 1-3 = 30/60/120 ms
     inline constexpr wchar_t kBluetooth[] = L"Bluetooth";
     inline constexpr wchar_t kWiFi[] = L"WiFi";

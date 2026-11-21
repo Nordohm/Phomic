@@ -485,6 +485,23 @@
                                 </Border.RenderTransform>
                             </Border>
                         </Grid>
+                        <!--  Before automatic gain, as in the audio (Denoiser.h).  -->
+                        <Grid ColumnSpacing="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock VerticalAlignment="Center" Text="Noise suppression" />
+                            <ToggleSwitch
+                                x:Name="NoiseSuppressionToggle"
+                                Grid.Column="1"
+                                MinWidth="0"
+                                VerticalAlignment="Center"
+                                AutomationProperties.Name="Noise suppression"
+                                OffContent=""
+                                OnContent=""
+                                Toggled="NoiseSuppressionToggle_Toggled" />
+                        </Grid>
                         <Grid ColumnSpacing="12">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />

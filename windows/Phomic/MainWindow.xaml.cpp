@@ -230,6 +230,8 @@ namespace winrt::Phomic::implementation
                                            static_cast<int>(phomic::AutoGain::kMinDb), static_cast<int>(phomic::AutoGain::kMaxDb));
         m_autoGain = std::make_unique<phomic::AutoGain>(static_cast<float>(autoStartDb));
         m_appliedGainDb = static_cast<float>(autoStartDb);
+        m_noiseSuppressionOn = settings::GetInt(settings::kNoiseSuppression, 0) != 0;
+        m_denoiser = std::make_unique<phomic::Denoiser>();
         const bool bluetoothEnabled = settings::GetInt(settings::kBluetooth, 1) != 0;
         m_wifiEnabled = settings::GetInt(settings::kWiFi, 1) != 0;
         const bool usbEnabled = settings::GetInt(settings::kUsb, 1) != 0;
@@ -242,6 +244,18 @@ namespace winrt::Phomic::implementation
         auto source = [this](float* out, uint32_t frames)
         {
             m_jitter->Read(out, frames);
+            // Noise suppression first, so automatic gain measures what's left of the background.
+            // Switched on, it starts afresh (and adds its 10 ms from then on).
+            const bool denoise = m_noiseSuppressionOn.load(std::memory_order_relaxed);
+            if (denoise && !m_denoising)
+            {
+                m_denoiser->Reset();
+            }
+            m_denoising = denoise;
+            if (denoise)
+            {
+                m_denoiser->Process(out, frames);
+            }
             if (m_autoGainOn.load(std::memory_order_relaxed))
             {
                 m_autoGain->Process(out, frames);
@@ -270,6 +284,7 @@ namespace winrt::Phomic::implementation
         GainMinText().Text(std::format(L"{:+d} dB", kMinGainDb));
         GainMaxText().Text(std::format(L"{:+d} dB", kMaxGainDb));
         AutoGainToggle().IsOn(m_autoGainOn);
+        NoiseSuppressionToggle().IsOn(m_noiseSuppressionOn);
         UpdateGain(false);
         BluetoothToggle().IsOn(bluetoothEnabled);
         WiFiToggle().IsOn(m_wifiEnabled);
@@ -1923,6 +1938,16 @@ namespace winrt::Phomic::implementation
         m_autoGainOn = AutoGainToggle().IsOn();
         phomic::settings::SetInt(phomic::settings::kAutoGain, m_autoGainOn ? 1 : 0);
         UpdateGain(false);
+    }
+
+    void MainWindow::NoiseSuppressionToggle_Toggled(winrt::Windows::Foundation::IInspectable const&, RoutedEventArgs const&)
+    {
+        if (!m_initialized)
+        {
+            return;
+        }
+        m_noiseSuppressionOn = NoiseSuppressionToggle().IsOn();
+        phomic::settings::SetInt(phomic::settings::kNoiseSuppression, m_noiseSuppressionOn ? 1 : 0);
     }
 
     // Automatic gain on: where it is now (while live). Off: the slider to set it by hand.

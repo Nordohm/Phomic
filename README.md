@@ -39,6 +39,7 @@ another tab on the iPhone, or click **Switch** in the PC app.
 - **USB doesn't work:** the *USB* row in the PC app says why and offers the fix. Some cables only charge.
 - **Crackles:** set *Buffering* to *Stable (120 ms)*.
 - **Too quiet or too loud:** keep *Automatic gain* on, or turn it off and set *Gain* yourself.
+- **Background noise:** turn on *Noise suppression* in the PC app, and leave the iPhone's Mic Mode on *Standard*.
 
 ## Support
 
