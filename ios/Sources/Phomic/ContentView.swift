@@ -96,13 +96,17 @@ private struct ConnectionScreen: View {
     }
 
     private static let verticalPadding: CGFloat = 32
+    /// Where the heading starts while choosing a PC: this far down the space between the bars.
+    /// The same on every tab, so the heading stays put when the tab changes, whatever is under it.
+    private static let headingAt: CGFloat = 0.2
 
     var body: some View {
         NavigationStack {
-            // Centered on the screen: the live screen around the mute button exactly, the rest as
-            // a group (a long list of PCs scrolls instead). The top bar (with the status bar) is
-            // taller than the tab bar, so centering between the two would sit a little low;
-            // instead the content keeps the same margin, the larger of the two, top and bottom.
+            // The live screen is centered around the mute button. The top bar (with the status
+            // bar) is taller than the tab bar, so centering between the two would sit a little
+            // low; instead the content keeps the same margin, the larger of the two, top and
+            // bottom. Choosing a PC starts at the same height on every tab instead (a long list
+            // of PCs scrolls).
             GeometryReader { screen in
                 let margin = max(screen.safeAreaInsets.top, screen.safeAreaInsets.bottom)
                 let height = max(0, screen.size.height - 2 * margin)
@@ -130,8 +134,9 @@ private struct ConnectionScreen: View {
                         .transition(.opacity)
                     }
                     .padding(.horizontal, 20)
+                    .padding(.top, model.isActive ? 0 : (height * Self.headingAt).rounded())
                     .padding(.vertical, Self.verticalPadding / 2)
-                    .frame(minHeight: height)
+                    .frame(minHeight: height, alignment: model.isActive ? .center : .top)
                     .padding(.vertical, margin)
                     .animation(.snappy, value: model.isActive)
                     .animation(.snappy, value: updates.available)
@@ -768,26 +773,26 @@ private struct PulseRings: View {
     }
 }
 
+/// The PC symbol at the start of a row in the list of PCs. The tab already says how it connects.
+private struct PCTile: View {
+    var body: some View {
+        Image(systemName: "desktopcomputer")
+            .font(.system(size: 18, weight: .medium))
+            .foregroundStyle(Color.accentColor)
+            .frame(width: 40, height: 40)
+            .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+}
+
 private struct PCCard: View {
     let name: String
-    let transport: TransportKind
     let requiresCode: Bool
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
             HStack(spacing: 14) {
-                Group {
-                    if transport == .bluetooth {
-                        TransportIcon(transport: .bluetooth, size: 22)
-                    } else {
-                        Image(systemName: "desktopcomputer")
-                            .font(.system(size: 18, weight: .medium))
-                    }
-                }
-                .foregroundStyle(Color.accentColor)
-                .frame(width: 40, height: 40)
-                .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                PCTile()
 
                 Text(name)
                     .font(.body.weight(.medium))
@@ -822,7 +827,7 @@ private struct WiFiComputers: View {
                  searching: model.servers.isEmpty)
             VStack(spacing: 10) {
                 ForEach(model.servers) { server in
-                    PCCard(name: server.name, transport: .wifi, requiresCode: server.requiresCode) {
+                    PCCard(name: server.name, requiresCode: server.requiresCode) {
                         model.connect(to: server)
                     }
                 }
@@ -851,12 +856,7 @@ private struct GetWindowsAppCard: View {
             if shown {
                 Link(destination: URL(string: "https://nordohm.com/Phomic")!) {
                     HStack(spacing: 14) {
-                        Image(systemName: "desktopcomputer")
-                            .font(.system(size: 18, weight: .medium))
-                            .foregroundStyle(Color.accentColor)
-                            .frame(width: 40, height: 40)
-                            .background(Color.accentColor.opacity(0.12),
-                                        in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        PCTile()
                         Text("Get Phomic for Windows")
                             .font(.body.weight(.medium))
                             .foregroundStyle(.primary)
@@ -891,7 +891,7 @@ private struct BluetoothComputers: View {
                  searching: model.nearbyPCs.isEmpty)
             VStack(spacing: 10) {
                 ForEach(model.nearbyPCs) { pc in
-                    PCCard(name: pc.name, transport: .bluetooth, requiresCode: pc.requiresCode) {
+                    PCCard(name: pc.name, requiresCode: pc.requiresCode) {
                         model.connect(to: pc)
                     }
                 }
@@ -908,17 +908,22 @@ private struct UsbWaiting: View {
     @Environment(MicController.self) private var model
 
     var body: some View {
-        VStack(spacing: 20) {
-            CableIllustration(waiting: !model.usbPaused)
-            VStack(spacing: 4) {
-                Text(model.usbPaused ? "Not waiting for a PC" : "Waiting for your PC")
-                    .font(.title3.weight(.semibold))
-                Text("Plug this iPhone into a PC running Phomic.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
+        VStack(spacing: 18) {
+            // Built like Hero (a picture 150 high, then the heading), so the heading sits where
+            // the other tabs have theirs.
+            VStack(spacing: 10) {
+                CableIllustration(waiting: !model.usbPaused)
+                    .frame(height: 150)
+                VStack(spacing: 4) {
+                    Text(model.usbPaused ? "Not waiting for a PC" : "Waiting for your PC")
+                        .font(.title3.weight(.semibold))
+                    Text("Plug this iPhone into a PC running Phomic.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                .accessibilityElement(children: .combine)
             }
-            .accessibilityElement(children: .combine)
             if model.usbPaused {
                 Button {
                     model.connectOverUsb()
