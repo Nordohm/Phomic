@@ -25,6 +25,6 @@ namespace phomic::settings
     inline constexpr wchar_t kBluetooth[] = L"Bluetooth";
     inline constexpr wchar_t kWiFi[] = L"WiFi";
     inline constexpr wchar_t kUsb[] = L"Usb";
-    inline constexpr wchar_t kCloseToTray[] = L"CloseToTray";
+    inline constexpr wchar_t kCloseToTray[] = L"CloseToTray"; // 1 = closing keeps Phomic in the tray (the default)
     inline constexpr wchar_t kSkippedUpdate[] = L"SkippedUpdate"; // version whose notice was closed
 }

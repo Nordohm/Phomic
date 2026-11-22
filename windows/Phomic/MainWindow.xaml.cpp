@@ -229,6 +229,8 @@ namespace winrt::Phomic::implementation
         SetUpTray();
 
         namespace settings = phomic::settings;
+        // Phomic's first start for this Windows user: it has no PC id yet (the servers below make one).
+        const bool firstStart = settings::GetString(phomic::pairing::kPcIdSetting).empty();
         m_bufferPreset = std::clamp(settings::GetInt(settings::kBufferMode, kDefaultBufferPreset), 0, kBufferChoices - 1);
         const int gainDb = std::clamp(settings::GetInt(settings::kManualGainDb, 0), kMinGainDb, kMaxGainDb);
         m_autoGainOn = settings::GetInt(settings::kAutoGain, 1) != 0;
@@ -322,9 +324,16 @@ namespace winrt::Phomic::implementation
         UsbToggle().IsOn(usbEnabled);
         PairingCheck().IsChecked(phomic::pairing::Required());
         UpdatePairing();
+        // A microphone is there when it's wanted: by default Phomic starts with Windows (in the tray) and
+        // closing the window keeps it running. Starting with Windows can only be set for a new user: for
+        // anyone else, no entry may mean they turned it off.
+        if (firstStart)
+        {
+            phomic::startup::SetEnabled(true);
+        }
         phomic::startup::Repair();
         StartupCheck().IsChecked(phomic::startup::IsEnabled());
-        m_closeToTray = settings::GetInt(settings::kCloseToTray, 0) != 0;
+        m_closeToTray = settings::GetInt(settings::kCloseToTray, 1) != 0;
         CloseToTrayCheck().IsChecked(m_closeToTray);
 
         RefreshDevices();
@@ -784,6 +793,7 @@ namespace winrt::Phomic::implementation
         button.IsEnabled(!m_micBusy);
         button.Visibility(Visibility::Visible);
         bar.Severity(InfoBarSeverity::Informational);
+        MicSteps().Visibility(!m_micBusy && state == vm::State::NotInstalled ? Visibility::Visible : Visibility::Collapsed);
 
         if (m_micBusy)
         {
@@ -807,9 +817,8 @@ namespace winrt::Phomic::implementation
         case vm::State::NotInstalled:
             // VB-CABLE isn't shipped with Phomic: people get it from VB-Audio themselves.
             bar.Title(L"Make your iPhone a microphone for other apps");
-            bar.Message(L"Windows only lets drivers add microphones, so Phomic uses VB-CABLE, a free virtual audio cable by "
-                        L"VB-Audio. Download it, unzip it, run VBCABLE_Setup_x64.exe as administrator and click "
-                        L"“Install Driver”. Phomic notices it here (restart if Windows asks).");
+            // The steps are under the message (MicSteps); Phomic notices the driver by itself.
+            bar.Message(L"Windows only lets drivers add microphones, so Phomic uses VB-CABLE, a free one by VB-Audio.");
             button.Content(box_value(L"Get VB-CABLE"));
             break;
         }

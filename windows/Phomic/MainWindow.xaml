@@ -57,18 +57,32 @@
                     Severity="Error"
                     Visibility="Collapsed" />
 
+                <!--  Under the message: the steps to install VB-CABLE (only while it isn't), then the button  -->
                 <InfoBar
                     x:Name="MicBar"
                     IsClosable="False"
                     Visibility="Collapsed"
                     Severity="Informational">
-                    <InfoBar.ActionButton>
+                    <StackPanel Margin="0,0,0,16" Spacing="12">
+                        <StackPanel x:Name="MicSteps" Spacing="4" Visibility="Collapsed">
+                            <TextBlock Text="1. Get VB-CABLE and unzip it." TextWrapping="Wrap" />
+                            <TextBlock TextWrapping="Wrap">
+                                <Run Text="2. Right-click" />
+                                <Run FontWeight="SemiBold" Text="VBCABLE_Setup_x64.exe" />
+                                <Run Text="and choose" />
+                                <Run FontWeight="SemiBold" Text="Run as administrator" /><Run Text="." />
+                            </TextBlock>
+                            <TextBlock TextWrapping="Wrap">
+                                <Run Text="3. Click" />
+                                <Run FontWeight="SemiBold" Text="Install Driver" /><Run Text=", and restart if Windows asks." />
+                            </TextBlock>
+                        </StackPanel>
                         <Button
                             x:Name="MicSetupButton"
                             HorizontalAlignment="Left"
                             Click="MicSetupButton_Click"
                             Style="{StaticResource AccentButtonStyle}" />
-                    </InfoBar.ActionButton>
+                    </StackPanel>
                 </InfoBar>
 
                 <InfoBar

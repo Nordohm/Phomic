@@ -130,11 +130,14 @@ default). You don't need to create a project in Visual Studio; it's already in `
   Apple Devices window does. That's undocumented, hence the button as a fallback. A service started while an
   iPhone was already plugged in sometimes misses it; then the row asks to plug it in again.
 - **Tray:** Phomic has a tray icon (click: open the window; right-click: *Open* / *Quit*; the tooltip shows
-  the status). At the bottom of the window:
+  the status). At the bottom of the window, both on by default (since 1.3), so the microphone is there when it's
+  wanted:
   - *Keep app running in tray when closing* makes the close button hide the window. *Quit* in the tray menu
     exits.
   - *Launch app in tray when Windows starts* adds Phomic to your sign-in apps (`HKCU\…\Run`, no admin rights). It
     starts with the window hidden (`Phomic.exe --tray`). Task Manager's *Startup apps* can turn it off too.
+    Phomic turns it on by itself only on its first start for a Windows user (no PC id yet): anyone who used an
+    earlier version keeps what they had, since no entry may mean they turned it off.
 
   Starting Phomic again while it runs opens the existing window.
 - The window is 600 logical pixels wide and never taller than its content. It follows the content (for example
