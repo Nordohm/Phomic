@@ -140,8 +140,10 @@ default). You don't need to create a project in Visual Studio; it's already in `
     earlier version keeps what they had, since no entry may mean they turned it off.
 
   Starting Phomic again while it runs opens the existing window.
-- The window is 600 logical pixels wide and never taller than its content. It follows the content (for example
-  when *Show details* opens) unless you made it shorter yourself.
+- The window is 600 logical pixels wide and never taller than its content. By itself it's at most three quarters
+  of the screen's height, and the rest scrolls (as tall as the content, it filled a 1080p screen); you can pull it
+  taller, up to the content. It follows the content (for example when *Show details* opens) unless you changed its
+  height yourself.
 - **Noise suppression** (*Off* by default, `Denoiser.h`) takes background noise out and keeps the voice, what the
   iPhone's Voice Isolation does, but on the PC: the iPhone sends its microphone unprocessed (its live screen warns
   when Mic Mode isn't *Standard*). It runs on the audio thread before automatic gain, so gain measures what's left

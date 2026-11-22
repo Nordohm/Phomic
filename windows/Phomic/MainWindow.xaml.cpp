@@ -539,8 +539,10 @@ namespace winrt::Phomic::implementation
 
     void MainWindow::FitToContent(double contentHeight)
     {
-        // The window is as tall as its content at most (nothing but empty space beyond that),
-        // and follows the content as it changes, unless the user made the window shorter.
+        // The window is as tall as its content at most (nothing but empty space beyond that). By
+        // itself it's at most three quarters of the screen's height (the rest scrolls): as tall as
+        // the content, it filled a 1080p screen. It follows the content as it changes, unless the
+        // user made it shorter or taller.
         if (contentHeight <= 0)
         {
             return;
@@ -556,8 +558,11 @@ namespace winrt::Phomic::implementation
         if (m_neededScale > 0 && m_neededScale != scale)
         {
             m_neededClientHeight = static_cast<int32_t>(std::lround(m_neededClientHeight * scale / m_neededScale));
+            m_autoClientHeight = static_cast<int32_t>(std::lround(m_autoClientHeight * scale / m_neededScale));
         }
-        const bool wasFull = m_neededClientHeight == 0 || client.Height + 2 >= m_neededClientHeight;
+        // Still the height Phomic gave it last (the user hasn't changed it): follow the content.
+        const bool first = m_autoClientHeight == 0;
+        const bool following = first || std::abs(client.Height - m_autoClientHeight) <= 2;
 
         // The title bar is part of the client area (see AppTitleBar), and Windows keeps the top
         // of it (a 1 px border) from the content: count both, or the content scrolls by that.
@@ -586,9 +591,11 @@ namespace winrt::Phomic::implementation
             presenter.PreferredMaximumHeight(needed + frameHeight);
         }
 
-        if (wasFull ? client.Height != needed : client.Height > needed)
+        const int32_t automatic = std::min(needed, area.Height * 3 / 4 - frameHeight);
+        const int32_t target = following ? automatic : std::min(client.Height, needed);
+        if (target != client.Height)
         {
-            window.ResizeClient({ client.Width, needed });
+            window.ResizeClient({ client.Width, target });
             // Growing past the bottom of the screen: move up.
             const auto position = window.Position();
             const int32_t bottom = position.Y + window.Size().Height;
@@ -598,6 +605,10 @@ namespace winrt::Phomic::implementation
             }
         }
         m_neededClientHeight = needed;
+        if (following)
+        {
+            m_autoClientHeight = automatic;
+        }
         m_neededScale = scale;
     }
 

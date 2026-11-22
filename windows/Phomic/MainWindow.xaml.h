@@ -229,6 +229,7 @@ namespace winrt::Phomic::implementation
         bool m_quitting = false;
         double m_contentHeight = 0;        // RootPanel's height, epx
         int32_t m_neededClientHeight = 0;  // client height that shows all content, physical px
+        int32_t m_autoClientHeight = 0;    // the client height Phomic gave the window last (0: none yet)
         double m_neededScale = 0;          // display scale m_neededClientHeight was computed for
     };
 }
