@@ -38,6 +38,7 @@ Get the free Windows app at nordohm.com/Phomic
 • Switch between Wi-Fi, Bluetooth and USB while you talk
 • Mute from the Lock Screen or the Dynamic Island
 • Automatic gain keeps your voice at an even level
+• Noise suppression on the PC takes out fans, hiss and typing
 • Audio goes straight to your PC, never through the internet
 • No account, no ads, no tracking
 
@@ -48,15 +49,18 @@ The Windows app also needs VB-CABLE, a free audio driver by VB-Audio. USB needs 
 
 ```
 New
-• Automatic gain with Phomic 1.2 for Windows
-• Tells you when an update is out
+• A new icon
+• Noise suppression with Phomic 1.3 for Windows
+• Warns when Mic Mode isn't Standard, so the PC gets your raw sound
+• Give Feedback in Settings
+• Shows where to get the PC app
 
 Improved
-• Smoother mute button
-• The glow warms to red as you get loud
+• Errors show at the top and can be swiped away
 
 Fixed
-• Live Activity no longer says "Phomic stopped"
+• Finds PCs again after a while in the background
+• A session no longer ends when iOS won't restart the microphone in the background
 ```
 
 **Keywords** (100; words from the name and subtitle are already indexed)
