@@ -165,11 +165,12 @@ namespace winrt::Phomic::implementation
     MainWindow::~MainWindow()
     {
         Shutdown();
-        if (m_denoiserLoader.joinable())
+        if (m_strongLoader.joinable())
         {
-            m_denoiserLoader.join();
+            m_strongLoader.join();
         }
-        delete m_denoiser.exchange(nullptr);
+        delete m_lightDenoiser.exchange(nullptr);
+        delete m_strongDenoiser.exchange(nullptr);
         m_tray.reset();
         if (m_trayIcon)
         {
@@ -235,11 +236,9 @@ namespace winrt::Phomic::implementation
                                            static_cast<int>(phomic::AutoGain::kMinDb), static_cast<int>(phomic::AutoGain::kMaxDb));
         m_autoGain = std::make_unique<phomic::AutoGain>(static_cast<float>(autoStartDb));
         m_appliedGainDb = static_cast<float>(autoStartDb);
-        m_noiseSuppressionOn = settings::GetInt(settings::kNoiseSuppression, 0) != 0;
-        if (m_noiseSuppressionOn)
-        {
-            LoadDenoiser();
-        }
+        m_noiseSuppression = std::clamp(settings::GetInt(settings::kNoiseSuppression, kNoiseSuppressionOff),
+                                        kNoiseSuppressionOff, kNoiseSuppressionStrong);
+        LoadDenoiser(m_noiseSuppression);
         const bool bluetoothEnabled = settings::GetInt(settings::kBluetooth, 1) != 0;
         m_wifiEnabled = settings::GetInt(settings::kWiFi, 1) != 0;
         const bool usbEnabled = settings::GetInt(settings::kUsb, 1) != 0;
@@ -253,15 +252,24 @@ namespace winrt::Phomic::implementation
         {
             m_jitter->Read(out, frames);
             // Noise suppression first, so automatic gain measures what's left of the background.
-            // Switched on, it starts afresh (and delays the sound by 30-40 ms from then on).
-            phomic::Denoiser* denoiser = m_denoiser.load(std::memory_order_acquire);
-            const bool denoise = denoiser && m_noiseSuppressionOn.load(std::memory_order_relaxed);
-            if (denoise && !m_denoising)
+            // Switched on or to the other model, it starts afresh (and delays the sound by 20-40 ms
+            // from then on).
+            phomic::Denoiser* denoiser = nullptr;
+            switch (m_noiseSuppression.load(std::memory_order_relaxed))
+            {
+            case kNoiseSuppressionLight:
+                denoiser = m_lightDenoiser.load(std::memory_order_acquire);
+                break;
+            case kNoiseSuppressionStrong:
+                denoiser = m_strongDenoiser.load(std::memory_order_acquire);
+                break;
+            }
+            if (denoiser && denoiser != m_lastDenoiser)
             {
                 denoiser->Reset();
             }
-            m_denoising = denoise;
-            if (denoise)
+            m_lastDenoiser = denoiser;
+            if (denoiser)
             {
                 denoiser->Process(out, frames);
             }
@@ -306,7 +314,8 @@ namespace winrt::Phomic::implementation
         GainMinText().Text(std::format(L"{:+d} dB", kMinGainDb));
         GainMaxText().Text(std::format(L"{:+d} dB", kMaxGainDb));
         AutoGainToggle().IsOn(m_autoGainOn);
-        NoiseSuppressionToggle().IsOn(m_noiseSuppressionOn);
+        NoiseSuppressionCombo().SelectedIndex(m_noiseSuppression);
+        UpdateNoiseSuppressionText();
         UpdateGain(false);
         BluetoothToggle().IsOn(bluetoothEnabled);
         WiFiToggle().IsOn(m_wifiEnabled);
@@ -1963,44 +1972,65 @@ namespace winrt::Phomic::implementation
         UpdateGain(false);
     }
 
-    void MainWindow::NoiseSuppressionToggle_Toggled(winrt::Windows::Foundation::IInspectable const&, RoutedEventArgs const&)
+    void MainWindow::NoiseSuppressionCombo_SelectionChanged(winrt::Windows::Foundation::IInspectable const&, SelectionChangedEventArgs const&)
     {
         if (!m_initialized)
         {
             return;
         }
-        m_noiseSuppressionOn = NoiseSuppressionToggle().IsOn();
-        phomic::settings::SetInt(phomic::settings::kNoiseSuppression, m_noiseSuppressionOn ? 1 : 0);
-        if (m_noiseSuppressionOn)
-        {
-            LoadDenoiser();
-        }
-    }
-
-    // The model takes some 300 ms to load: on a thread of its own, once. If it can't be loaded (it's
-    // built into Phomic.exe, so that shouldn't happen), the caption under the switch says so.
-    void MainWindow::LoadDenoiser()
-    {
-        if (m_denoiserLoader.joinable())
+        const int choice = NoiseSuppressionCombo().SelectedIndex();
+        if (choice < kNoiseSuppressionOff || choice > kNoiseSuppressionStrong)
         {
             return;
         }
-        m_denoiserLoader = std::thread([this, weak = get_weak(), queue = DispatcherQueue()]
+        m_noiseSuppression = choice;
+        phomic::settings::SetInt(phomic::settings::kNoiseSuppression, choice);
+        LoadDenoiser(choice);
+        UpdateNoiseSuppressionText();
+    }
+
+    // Each model the first time it's chosen. Light (RNNoise) is ready at once. Strong (DeepFilterNet) takes
+    // some 300 ms to load: on a thread of its own, once. If it can't be loaded (it's built into Phomic.exe, so
+    // that shouldn't happen), the caption says so.
+    void MainWindow::LoadDenoiser(int choice)
+    {
+        if (choice == kNoiseSuppressionLight && !m_lightDenoiser.load())
         {
-            auto denoiser = std::make_unique<phomic::Denoiser>();
+            m_lightDenoiser.store(new phomic::Denoiser(phomic::Denoiser::Strength::Light), std::memory_order_release);
+        }
+        if (choice != kNoiseSuppressionStrong || m_strongLoader.joinable())
+        {
+            return;
+        }
+        m_strongLoader = std::thread([this, weak = get_weak(), queue = DispatcherQueue()]
+        {
+            auto denoiser = std::make_unique<phomic::Denoiser>(phomic::Denoiser::Strength::Strong);
             if (denoiser->IsReady())
             {
-                m_denoiser.store(denoiser.release(), std::memory_order_release);
+                m_strongDenoiser.store(denoiser.release(), std::memory_order_release);
                 return;
             }
             queue.TryEnqueue([weak]
             {
                 if (auto self = weak.get())
                 {
-                    self->NoiseSuppressionText().Text(L"Couldn't load noise suppression.");
+                    self->m_strongFailed = true;
+                    self->UpdateNoiseSuppressionText();
                 }
             });
         });
+    }
+
+    // What the choice costs; nothing when it's off.
+    void MainWindow::UpdateNoiseSuppressionText()
+    {
+        const int choice = m_noiseSuppression;
+        const wchar_t* text = choice == kNoiseSuppressionLight ? L"Adds 30 ms of delay and uses some CPU."
+                            : choice != kNoiseSuppressionStrong ? L""
+                            : m_strongFailed ? L"Couldn't load Strong noise suppression."
+                                             : L"Adds 40 ms of delay and uses more CPU.";
+        NoiseSuppressionText().Text(text);
+        NoiseSuppressionText().Visibility(*text ? Visibility::Visible : Visibility::Collapsed);
     }
 
     // Automatic gain on: where it is now (while live). Off: the slider to set it by hand.

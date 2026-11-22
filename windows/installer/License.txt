@@ -6,6 +6,8 @@ Phomic is free and open source under the MIT License (below). It also contains s
 - Microsoft Windows App SDK runtime (Microsoft Corporation): Microsoft's license terms, which among other things don't allow reverse engineering it or distributing it apart from Phomic.
 - WebView2, C++/WinRT, WIL and part of WinUI (Microsoft Corporation): open-source licenses (BSD and MIT).
 - libopus (Xiph.Org Foundation and others): BSD license.
+- RNNoise (Jean-Marc Valin, Xiph.Org Foundation and others): BSD license.
+- DeepFilterNet and the Rust libraries built in with it: MIT and Apache 2.0 licenses, and similar.
 
 Phomic doesn't include VB-CABLE, the virtual audio driver it uses. You get that from VB-Audio, under their terms.
 

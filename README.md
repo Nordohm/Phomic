@@ -39,7 +39,8 @@ another tab on the iPhone, or click **Switch** in the PC app.
 - **USB doesn't work:** the *USB* row in the PC app says why and offers the fix. Some cables only charge.
 - **Crackles:** set *Buffering* to *Stable (120 ms)*.
 - **Too quiet or too loud:** keep *Automatic gain* on, or turn it off and set *Gain* yourself.
-- **Background noise:** turn on *Noise suppression* in the PC app, and leave the iPhone's Mic Mode on *Standard*.
+- **Background noise:** set *Noise suppression* in the PC app to *Light*, or *Strong* for typing, and leave the
+  iPhone's Mic Mode on *Standard*.
 
 ## Support
 
@@ -52,8 +53,8 @@ Building the apps and how they work: [docs/development.md](docs/development.md).
 
 ## License
 
-[MIT](LICENSE), without any warranty. Phomic contains libopus and, on Windows, DeepFilterNet and Microsoft's Windows
-App SDK under their own terms ([details](windows/third_party/README.md)).
+[MIT](LICENSE), without any warranty. Phomic contains libopus and, on Windows, RNNoise, DeepFilterNet and
+Microsoft's Windows App SDK under their own terms ([details](windows/third_party/README.md)).
 
 Phomic isn't made, sponsored or endorsed by Apple, Microsoft, VB-Audio or the Bluetooth SIG. Apple, iPhone, App Store
 and Apple Devices are trademarks of Apple Inc. Windows is a trademark of Microsoft Corporation. Bluetooth is a

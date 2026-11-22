@@ -67,8 +67,8 @@ namespace winrt::Phomic::implementation
             winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
         void AutoGainToggle_Toggled(winrt::Windows::Foundation::IInspectable const& sender,
             winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
-        void NoiseSuppressionToggle_Toggled(winrt::Windows::Foundation::IInspectable const& sender,
-            winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
+        void NoiseSuppressionCombo_SelectionChanged(winrt::Windows::Foundation::IInspectable const& sender,
+            winrt::Microsoft::UI::Xaml::Controls::SelectionChangedEventArgs const& args);
         void WiFiAllowButton_Click(winrt::Windows::Foundation::IInspectable const& sender,
             winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
 
@@ -183,17 +183,22 @@ namespace winrt::Phomic::implementation
         std::atomic<float> m_gain{ 1.f };          // manual gain (automatic gain off)
         std::atomic<bool> m_autoGainOn{ true };
         std::atomic<float> m_appliedGainDb{ 0.f }; // automatic gain's current gain, for the UI
-        std::atomic<bool> m_noiseSuppressionOn{ false };
+        // Noise suppression's choices, as in its list and the setting.
+        static constexpr int kNoiseSuppressionOff = 0, kNoiseSuppressionLight = 1, kNoiseSuppressionStrong = 2;
+        std::atomic<int> m_noiseSuppression{ kNoiseSuppressionOff };
         std::atomic<float> m_outputPeak{ 0.f }; // for the level meter: raised by the audio thread, taken by the UI
-        // Noise suppression's model, loaded on a thread of its own the first time noise suppression is
-        // on (it takes a moment); until it's there the sound goes through as it is. Freed in the
-        // destructor, once the audio has stopped.
-        std::atomic<phomic::Denoiser*> m_denoiser{ nullptr };
-        std::thread m_denoiserLoader;
-        void LoadDenoiser();
+        // Noise suppression's models, each made the first time it's chosen. Strong (DeepFilterNet) takes a
+        // moment, so it's loaded on a thread of its own, and the sound goes through as it is until it's
+        // there. Freed in the destructor, once the audio has stopped.
+        std::atomic<phomic::Denoiser*> m_lightDenoiser{ nullptr };
+        std::atomic<phomic::Denoiser*> m_strongDenoiser{ nullptr };
+        std::thread m_strongLoader;
+        void LoadDenoiser(int choice);
+        void UpdateNoiseSuppressionText();
+        bool m_strongFailed = false;
         // Audio thread only (the output's source, see InitializeComponent):
         std::unique_ptr<phomic::AutoGain> m_autoGain;
-        bool m_denoising = false; // whether m_denoiser ran on the last block
+        phomic::Denoiser* m_lastDenoiser = nullptr; // the one that ran on the last block, if any
         phomic::Limiter m_limiter;
         void UpdateGain(bool live);
         bool m_initialized = false;

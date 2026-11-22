@@ -15,6 +15,20 @@
   SwiftPM target (`Sources/COpus`) and encodes with it. The license notice ships with both: the build copies
   `COPYING` to `licenses/opus/` next to `Phomic.exe`, and the iOS app shows it under *Settings › Acknowledgements*.
 
+## RNNoise (`rnnoise/`)
+
+- **What:** RNNoise 0.2, noise suppression for speech with a recurrent neural network, and its trained model.
+  Copyright 2007-2017, 2024 Jean-Marc Valin, 2023 Amazon, 2017 Mozilla, 2005-2017 Xiph.Org Foundation, 2003-2004
+  Mark Borgerding.
+- **Origin:** https://github.com/xiph/rnnoise, downloaded from
+  `https://github.com/xiph/rnnoise/releases/download/v0.2/rnnoise-0.2.tar.gz` (SHA-256
+  `90fce4b00b9ff24c08dbfe31b82ffd43bae383d85c5535676d28b0a2b11c0d37`).
+- **License:** 3-clause BSD; see `rnnoise/COPYING`.
+- **How Phomic uses it:** only the library's sources and headers (`src/`, `include/`) are kept, unmodified, without
+  the tools, the examples and the run-time CPU detection. `rnnoise.vcxproj` compiles them into a static library that
+  is linked into `Phomic.exe`. The PC app's *Noise suppression* set to *Light* runs the iPhone's audio through it.
+  The build copies `COPYING` to `licenses/rnnoise/` next to `Phomic.exe`.
+
 ## DeepFilterNet (`deepfilternet/`)
 
 - **What:** DeepFilterNet 0.5.6 (libDF, the Rust library) and its DeepFilterNet3 model, noise suppression for
@@ -26,8 +40,8 @@
   Rust 1.80 or later).
 - **License:** MIT or Apache 2.0, at your choice, for the code and the model; see `deepfilternet/LICENSE*`.
 - **How Phomic uses it:** unmodified. `windows/DeepFilter` (Phomic's own code, MIT) builds it with the model inside
-  into a static library that is linked into `Phomic.exe`. The PC app's *Noise suppression* runs the iPhone's audio
-  through it. Cargo downloads the Rust crates it needs (79, MIT, Apache 2.0 or similar, all permissive) from
+  into a static library that is linked into `Phomic.exe`. The PC app's *Noise suppression* set to *Strong* runs the
+  iPhone's audio through it. Cargo downloads the Rust crates it needs (79, MIT, Apache 2.0 or similar, all permissive) from
   crates.io at the versions in `Cargo.lock`. The build copies DeepFilterNet's license files and
   `windows/DeepFilter/THIRD-PARTY.txt`, every compiled-in crate's license, to `licenses/deepfilternet/` next to
   `Phomic.exe`.

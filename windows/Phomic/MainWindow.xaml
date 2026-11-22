@@ -528,7 +528,10 @@
                                     Style="{StaticResource CaptionTextBlockStyle}" />
                             </Grid>
                         </StackPanel>
-                        <!--  In the audio it comes first, before automatic gain measures (Denoiser.h).  -->
+                        <!--
+                            In the audio it comes first, before automatic gain measures (Denoiser.h). Light is
+                            RNNoise, Strong DeepFilterNet; the caption (set in code) says what the choice costs.
+                        -->
                         <Grid ColumnSpacing="12">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
@@ -540,18 +543,20 @@
                                     x:Name="NoiseSuppressionText"
                                     Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                     Style="{StaticResource CaptionTextBlockStyle}"
-                                    Text="Adds 40 ms of delay and uses more CPU."
-                                    TextWrapping="Wrap" />
+                                    TextWrapping="Wrap"
+                                    Visibility="Collapsed" />
                             </StackPanel>
-                            <ToggleSwitch
-                                x:Name="NoiseSuppressionToggle"
+                            <ComboBox
+                                x:Name="NoiseSuppressionCombo"
                                 Grid.Column="1"
-                                MinWidth="0"
+                                MinWidth="120"
                                 VerticalAlignment="Center"
                                 AutomationProperties.Name="Noise suppression"
-                                OffContent=""
-                                OnContent=""
-                                Toggled="NoiseSuppressionToggle_Toggled" />
+                                SelectionChanged="NoiseSuppressionCombo_SelectionChanged">
+                                <x:String>Off</x:String>
+                                <x:String>Light</x:String>
+                                <x:String>Strong</x:String>
+                            </ComboBox>
                         </Grid>
                     </StackPanel>
                 </Border>
