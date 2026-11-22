@@ -54,6 +54,10 @@
   protect the runtime as much as Microsoft's do, and Microsoft's trademarks don't suggest Microsoft made or endorses
   Phomic. The installer's license page (`windows/installer/License.txt`) covers the second point. The license and
   Microsoft's third-party notices ship in `licenses/microsoft/windows-app-sdk/`.
+- **Visual C++ runtime** (`vcruntime140.dll`, `vcruntime140_1.dll`, `msvcp140.dll`, from Visual Studio's
+  redistributable files): `Phomic.exe` needs them, and a PC without Microsoft's Visual C++ Redistributable doesn't
+  have them, so the build copies them next to `Phomic.exe`. They're distributable code under Visual Studio's license
+  terms, on the same conditions as the Windows App SDK runtime above, which the installer's license page covers.
 - **WebView2** (comes with the Windows App SDK): BSD-style license, in `licenses/microsoft/webview2/`.
 - **C++/WinRT** and **WIL** (Windows Implementation Libraries), compiled into `Phomic.exe`: MIT, in
   `licenses/microsoft/cppwinrt/` and `licenses/microsoft/wil/`.

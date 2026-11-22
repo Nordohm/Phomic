@@ -236,6 +236,15 @@
       <DestinationFolders>$(OutDir)licenses\deepfilternet</DestinationFolders>
     </CopyFileToFolders>
     <!--
+      The C++ runtime Phomic.exe needs (dumpbin /dependents): a new PC doesn't have it, and without
+      it Phomic doesn't start ("VCRUNTIME140_1.dll was not found"). Windows App SDK's own files don't
+      need it. Microsoft lets apps carry these files next to the exe ("app-local"); Debug builds use
+      the debug runtime, which only a PC with Visual Studio has anyway.
+    -->
+    <CopyFileToFolders Include="$(VCToolsRedistInstallDir)$(Platform)\Microsoft.VC*.CRT\vcruntime140.dll;$(VCToolsRedistInstallDir)$(Platform)\Microsoft.VC*.CRT\vcruntime140_1.dll;$(VCToolsRedistInstallDir)$(Platform)\Microsoft.VC*.CRT\msvcp140.dll" Condition="'$(UseDebugLibraries)' != 'true'">
+      <DestinationFolders>$(OutDir)</DestinationFolders>
+    </CopyFileToFolders>
+    <!--
       Microsoft's parts that ship with Phomic (the Windows App SDK runtime is self-contained, so
       its files are next to Phomic.exe) or are compiled into it: their license terms and notices.
       The four Windows App SDK packages share one license text.

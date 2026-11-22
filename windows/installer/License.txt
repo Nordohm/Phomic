@@ -3,7 +3,7 @@ Copyright (c) 2026 Nordohm
 
 Phomic is free and open source under the MIT License (below). It also contains software by others, under their own terms, which you agree to as well by installing it. The full texts are in the "licenses" folder next to Phomic.exe:
 
-- Microsoft Windows App SDK runtime (Microsoft Corporation): Microsoft's license terms, which among other things don't allow reverse engineering it or distributing it apart from Phomic.
+- Microsoft Windows App SDK runtime and Visual C++ runtime (Microsoft Corporation): Microsoft's license terms, which among other things don't allow reverse engineering them or distributing them apart from Phomic.
 - WebView2, C++/WinRT, WIL and part of WinUI (Microsoft Corporation): open-source licenses (BSD and MIT).
 - libopus (Xiph.Org Foundation and others): BSD license.
 - RNNoise (Jean-Marc Valin, Xiph.Org Foundation and others): BSD license.
