@@ -22,24 +22,26 @@ FONTS = r"C:\Windows\Fonts"
 BLUE_TOP = (58, 151, 242)     # app icon gradient, #3A97F2
 BLUE_BOTTOM = (20, 103, 214)  # #1467D6
 
-SOURCES = {
-    "wifi": "IMG_3991.PNG",   # live over Wi-Fi
-    "usb": "IMG_3992.PNG",    # live over USB
-    "muted": "IMG_3993.PNG",  # muted (Wi-Fi)
-    "pick": "IMG_3994.PNG",   # the Wi-Fi tab's list of PCs
+SOURCES = {  # 1.3, 22 Nov 2026 (the Lock Screen from 1.2: without its file, the slide made then stays)
+    "wifi": "IMG_4098.PNG",   # live over Wi-Fi
+    "usb": "IMG_4096.PNG",    # live over USB (its status bar is the Wi-Fi one's: a Live Activity filled it)
+    "muted": "IMG_4099.PNG",  # muted (Wi-Fi)
+    "pick": "IMG_4100.PNG",   # the Wi-Fi tab's list of PCs
     "lock": "IMG_3995.PNG",   # Lock Screen with the Live Activity (only its pieces are used)
 }
 
 # Where things are in those screenshots (pixels, measured). The name "ATT_DESKTOP_OLD" sits between
 # two underscores; "DESKTOP" is what's between them.
-BUTTON_CENTER = (589.5, 1276.8)   # the mute button: the glow is a circle around it
-CHIP = {                          # the "<PC> · 8 ms" capsule under the title, y 851-924
-    # icon, "DESKTOP", " · 8 ms" (from the space after "OLD" to the end), as x ranges
-    "wifi": ((323, 367), (482, 647), (741, 858)),
-    "usb": ((324, 368), (483, 648), (742, 858)),
-    "muted": ((314, 358), (473, 638), (732, 869)),
+BUTTON_CENTER = (589.5, 1277.5)   # the mute button: the glow is a circle around it
+CHIP = {                          # the "<PC> · 3 ms" capsule under the title
+    # icon, "DESKTOP", " · 3 ms" (from the space after "OLD" to the end), as x ranges
+    "wifi": ((305, 351), (478, 656), (754, 879)),
+    "usb": ((305, 351), (478, 656), (754, 878)),
+    "muted": ((305, 351), (478, 656), (754, 878)),
 }
-CHIP_Y = (851, 924)
+CHIP_Y = (847, 924)
+CHIP_LETTERS_END = 899                # the underscore after "DESKTOP" starts here, under the P
+STATUS_BAR_HEIGHT = 165               # above the Settings button
 CHIP_PAD = (34, 32)                   # the capsule's edge to the icon, and the text to its edge
 CHIP_ICON_GAP = 28                    # icon to text
 CHIP_FILL = ((118, 118, 128), 0.245)  # iOS's tertiary fill over the glow (measured)
@@ -137,7 +139,7 @@ def rename_chip(im, kind):
         if piece is None:
             x += CHIP_ICON_GAP
             continue
-        for sy in range(y0, y1):
+        for sy in range(y0, CHIP_LETTERS_END if piece is name else y1):
             for sx in range(piece[0], piece[1]):
                 floor = capsule_fill(sx, sy)
                 k = max(0.0, min(1.0, (brightness(spx[sx, sy]) - floor - 1) / max(1, ink - floor)))
@@ -159,10 +161,11 @@ def clean(im, kind):
     if kind in CHIP:
         rename_chip(im, kind)
     if kind == "pick":
-        # The PC's row: "ATT_DESKTOP_OLD" from x 272, "DESKTOP" at 384-598.
+        # The PC's row: "ATT_DESKTOP_OLD" from x 272, "DESKTOP" at 393-619, letters y 1314-1351 (the
+        # underscore after it, under the P, from 1352).
         src = im.copy()
-        d.rectangle((266, 1530, 730, 1596), fill=src.getpixel((800, 1560)))
-        paste_glyph(im, src, (384, 1530, 598, 1596), (255, 255, 255), floor=40, at=(272, 1530))
+        d.rectangle((266, 1300, 750, 1370), fill=src.getpixel((800, 1335)))
+        paste_glyph(im, src, (393, 1300, 619, 1352), (255, 255, 255), floor=40, at=(272, 1300))
     return im
 
 
@@ -398,20 +401,24 @@ def header(screens):
 
 if __name__ == "__main__":
     src = sys.argv[1] if len(sys.argv) > 1 else os.path.expanduser("~/Downloads")
-    raw = {k: Image.open(os.path.join(src, v)).convert("RGB") for k, v in SOURCES.items()}
+    raw = {k: Image.open(os.path.join(src, v)).convert("RGB") for k, v in SOURCES.items()
+           if os.path.exists(os.path.join(src, v))}
+    raw["usb"].paste(raw["wifi"].crop((0, 0, raw["wifi"].width, STATUS_BAR_HEIGHT)), (0, 0))
     cleaned = {k: clean(im, k) for k, im in raw.items() if k != "lock"}
-    cleaned["lock"] = lock_screen(raw["lock"], live_activity=False)  # shown enlarged on top instead
-    lock_with_activity = lock_screen(raw["lock"])
+    if "lock" in raw:
+        cleaned["lock"] = lock_screen(raw["lock"], live_activity=False)  # shown enlarged on top instead
+        lock_with_activity = lock_screen(raw["lock"])
     for folder, size in (("6.1", (1179, 2556)), ("6.9", (1320, 2868))):
         folder_path = os.path.join(OUT, "screenshots", folder)
         os.makedirs(folder_path, exist_ok=True)
-        for old in os.listdir(folder_path):
-            os.remove(os.path.join(folder_path, old))
         for i, (kind, headline, subline) in enumerate(SLIDES, 1):
             path = os.path.join(folder_path, f"{i}-{kind}.png")
+            if kind not in cleaned:
+                print("kept", path)
+                continue
             # The Lock Screen buttons span y 2232-2408 and leave 148 px to the screen's bottom edge
             # (2556): the enlarged Live Activity ends the same 148 px above them.
-            callout = (lock_with_activity, (40, 1934, 1139, 2171), 70, 2232 - (2556 - 2408))
-            screenshot(cleaned[kind], headline, subline, size, callout=callout if kind == "lock" else None).save(path)
+            callout = (lock_with_activity, (40, 1934, 1139, 2171), 70, 2232 - (2556 - 2408)) if kind == "lock" else None
+            screenshot(cleaned[kind], headline, subline, size, callout=callout).save(path)
     header(raw).save(os.path.join(OUT, "header-universal.png"))
     print("wrote", OUT)

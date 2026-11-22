@@ -204,7 +204,8 @@
     <Image Include="Assets\Phomic.svg" />
     <None Include="Assets\AppStoreBadge-Black.svg" />
     <None Include="Assets\AppStoreBadge-White.svg" />
-    <None Include="Assets\AppStoreQrCode.jpg" />
+    <None Include="Assets\AppStoreQrCode-Light.jpg" />
+    <None Include="Assets\AppStoreQrCode-Dark.jpg" />
   </ItemGroup>
   <ItemGroup>
     <Midl Include="MainWindow.idl">

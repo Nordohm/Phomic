@@ -9,7 +9,8 @@ IDI_PHOMIC_GLYPH ICON "Assets\\Phomic.ico"
 // Apple's App Store badge, linking to Phomic for iPhone (Apple's artwork, from its marketing guidelines).
 IDR_BADGE_BLACK RCDATA "Assets\\AppStoreBadge-Black.svg"
 IDR_BADGE_WHITE RCDATA "Assets\\AppStoreBadge-White.svg"
-IDR_APPSTORE_QR RCDATA "Assets\\AppStoreQrCode.jpg"
+IDR_APPSTORE_QR_LIGHT RCDATA "Assets\\AppStoreQrCode-Light.jpg"
+IDR_APPSTORE_QR_DARK RCDATA "Assets\\AppStoreQrCode-Dark.jpg"
 
 VS_VERSION_INFO VERSIONINFO
  FILEVERSION PHOMIC_VERSION_MAJOR, PHOMIC_VERSION_MINOR, PHOMIC_VERSION_PATCH, 0

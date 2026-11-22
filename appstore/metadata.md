@@ -118,7 +118,8 @@ Background modes:
 
 ## Assets
 
-Made by `appstore/make_assets.py` from real dark-mode screenshots (1.2, Nov 2026): status bar set to 9:41, and
+Made by `appstore/make_assets.py` from real dark-mode screenshots (1.3, 22 Nov 2026; the Lock Screen from 1.2,
+16 Nov, kept since it didn't change): status bar set to 9:41, and
 the PC's name "DESKTOP", cut out of the real name so it stays in the iPhone's font. The Lock Screen slide keeps
 the real Live Activity but draws its own wallpaper and clock: the screenshot's wallpaper is someone else's art.
 

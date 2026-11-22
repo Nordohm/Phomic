@@ -1031,7 +1031,9 @@ namespace winrt::Phomic::implementation
         dialog.CloseButtonText(L"Close");
         dialog.DefaultButton(ContentDialogButton::Close);
 
-        auto stream = co_await ResourceStream(IDR_APPSTORE_QR);
+        // The code in the dialog's colors: black on white in light mode, white on black in dark mode.
+        const bool dark = RootPanel().ActualTheme() == ElementTheme::Dark;
+        auto stream = co_await ResourceStream(dark ? IDR_APPSTORE_QR_DARK : IDR_APPSTORE_QR_LIGHT);
         if (stream.Size() != 0)
         {
             co_await code.SetSourceAsync(stream);

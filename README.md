@@ -5,7 +5,7 @@ Your iPhone as a microphone for your Windows PC, over Wi-Fi, Bluetooth or a USB 
 <!-- One line each: split over lines, GitHub takes the image out of the link. -->
 <a href="https://apps.apple.com/app/phomic/id6835323092"><picture><source media="(prefers-color-scheme: dark)" srcset="appstore/badges/download-on-the-app-store-white.svg"><img src="appstore/badges/download-on-the-app-store-black.svg" alt="Download on the App Store" height="40"></picture></a>
 
-<a href="https://apps.apple.com/app/phomic/id6835323092"><img src="appstore/qr-code.png" alt="QR code: Phomic on the App Store" width="200"></a>
+<a href="https://apps.apple.com/app/phomic/id6835323092"><picture><source media="(prefers-color-scheme: dark)" srcset="appstore/qr-code-dark.jpg"><img src="appstore/qr-code-light.jpg" alt="QR code: Phomic on the App Store" width="200"></picture></a>
 
 ## Get started
 
