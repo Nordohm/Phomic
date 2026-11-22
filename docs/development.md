@@ -74,8 +74,9 @@ signature, which requires a paid EV code-signing certificate.
 
 ## Windows app
 
-Requirements: Visual Studio 2026 with the *WinUI application development* (C++) workload. You don't
-need to create a project in Visual Studio; it's already in `windows/`.
+Requirements: Visual Studio 2026 with the *WinUI application development* (C++) workload, and
+[Rust](https://rustup.rs) for the noise suppression (`rustup-init.exe --profile minimal`; the MSVC toolchain, the
+default). You don't need to create a project in Visual Studio; it's already in `windows/`.
 
 - Open `windows/Phomic.slnx` and press F5, **or** build from a terminal:
 
@@ -138,13 +139,36 @@ need to create a project in Visual Studio; it's already in `windows/`.
   Starting Phomic again while it runs opens the existing window.
 - The window is 600 logical pixels wide and never taller than its content. It follows the content (for example
   when *Show details* opens) unless you made it shorter yourself.
-- **Noise suppression** (off by default, `Denoiser.h`): [RNNoise](https://github.com/xiph/rnnoise) 0.2, a small
-  neural network, takes background noise out and keeps the voice, what the iPhone's Voice Isolation does, but on
-  the PC: the iPhone sends its microphone unprocessed (its live screen warns when Mic Mode isn't *Standard*). It
-  runs on the audio thread before automatic gain, so gain measures what's left of the background. RNNoise delays
-  the sound by 20 ms, plus 10 ms when the audio device's blocks aren't 10 ms (RNNoise's own size), and takes about
-  2 % of one core (an i5-8600K: 0.16 ms per 10 ms block). Measured with synthetic speech and hiss: hiss alone went
-  from -34 to -108 dBFS, speech stayed at -22 dBFS.
+- **Noise suppression** (off by default, `Denoiser.h`): [DeepFilterNet](https://github.com/Rikorose/DeepFilterNet)
+  3, a neural network for 48 kHz speech, takes background noise out and keeps the voice, what the iPhone's Voice
+  Isolation does, but on the PC: the iPhone sends its microphone unprocessed (its live screen warns when Mic Mode
+  isn't *Standard*). It runs on the audio thread before automatic gain, so gain measures what's left of the
+  background. The switch's caption says what it costs:
+  - **Delay:** 30 ms of its own, plus 10 ms when the audio device's blocks aren't 10 ms (the model's size); VB-CABLE
+    takes small blocks, so 40 ms.
+  - **CPU:** about 5 % of one core (an i5-8600K: 0.5 ms per 10 ms block).
+  - **Loading** the model takes about 0.3 s, so it's loaded on a thread of its own the first time it's on, and the
+    sound goes through as it is until then.
+
+  Two settings differ from libDF's, both because the voice came out wrong without them:
+  - **Both stages on every frame** (`DeepFilter/src/lib.rs`): libDF skips its second stage, which does the
+    frequencies under 5 kHz, when it estimates the SNR at over 20 dB, and the first stage alone garbles the voice.
+    In a quiet room it switches back and forth.
+  - **+20 dB into the model and back out** (`Denoiser.h`): it doesn't hear frames under -70 dBFS and lost the
+    quieter half of speech at about -55 dBFS, and the iPhone's raw microphone can be that quiet. With the gain,
+    speech from -2 to -72 dBFS comes out whole.
+
+  It's in Rust: `windows/DeepFilter` is a small library around DeepFilterNet (`third_party/deepfilternet`) with the
+  model built in and a C interface (`DeepFilter.h`) that returns errors instead of ending the program.
+  `Phomic.vcxproj` runs `cargo build --release --locked` on it before it links, also for Debug builds, since the
+  model has to keep up with the audio; the first build takes a few minutes. After `Cargo.lock` changes, run
+  `python windows/DeepFilter/licenses.py`: it writes the licenses of the Rust crates compiled in
+  (`THIRD-PARTY.txt`, shipped in `licenses/deepfilternet/`).
+
+  Before DeepFilterNet, Phomic had [RNNoise](https://github.com/xiph/rnnoise) 0.2, which is lighter (20 ms of delay,
+  2 % of a core). Measured side by side with synthetic speech, hiss and clicks: hiss alone, -34 dBFS, became
+  silence with DeepFilterNet and -108 dBFS with RNNoise; clicks went down by 28-30 dB with DeepFilterNet and 21 dB
+  with RNNoise. Synthetic noise says little about how it sounds: on a real microphone, typing is the hard case.
 - **Gain:** the iPhone sends its microphone raw, which is quiet, and how quiet depends on the voice, the distance
   and the Mic Mode. *Automatic gain* (on by default, `AutoGain.h`) keeps speech at an even level, about -23 dBFS:
   it tracks the room's background noise, counts what's clearly above it as speech, turns down quickly when that's
@@ -199,6 +223,7 @@ Code map:
 | `VirtualMic.*` | Finds VB-CABLE's endpoints (grouped per cable device), renames/disables them, launches VB-CABLE's installer |
 | `AudioOutput.*` | Event-driven WASAPI shared-mode playback (for listening on real speakers), device list, hot-plug watcher |
 | `AutoGain.h`, `Limiter.h` | Automatic gain; applying the gain and keeping the result under -1 dBFS |
+| `Denoiser.h`, `DeepFilter.h` | Noise suppression: DeepFilterNet in 10 ms blocks, and the C interface to `windows/DeepFilter` |
 | `MainWindow.*` | UI, including the update check |
 | `App.xaml` | Shared styles, and a CheckBox template with a plain check mark (WinUI's animated one sometimes showed a stray "-") |
 | `TrayIcon.*`, `Startup.h` | Tray icon and menu; *Start with Windows* (Run key) |

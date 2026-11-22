@@ -184,9 +184,14 @@ namespace winrt::Phomic::implementation
         std::atomic<bool> m_autoGainOn{ true };
         std::atomic<float> m_appliedGainDb{ 0.f }; // automatic gain's current gain, for the UI
         std::atomic<bool> m_noiseSuppressionOn{ false };
+        // Noise suppression's model, loaded on a thread of its own the first time noise suppression is
+        // on (it takes a moment); until it's there the sound goes through as it is. Freed in the
+        // destructor, once the audio has stopped.
+        std::atomic<phomic::Denoiser*> m_denoiser{ nullptr };
+        std::thread m_denoiserLoader;
+        void LoadDenoiser();
         // Audio thread only (the output's source, see InitializeComponent):
         std::unique_ptr<phomic::AutoGain> m_autoGain;
-        std::unique_ptr<phomic::Denoiser> m_denoiser;
         bool m_denoising = false; // whether m_denoiser ran on the last block
         phomic::Limiter m_limiter;
         void UpdateGain(bool live);

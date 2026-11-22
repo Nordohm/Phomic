@@ -72,6 +72,9 @@
     <ClInclude Include="Denoiser.h">
       <Filter>Engine</Filter>
     </ClInclude>
+    <ClInclude Include="DeepFilter.h">
+      <Filter>Engine</Filter>
+    </ClInclude>
     <ClInclude Include="AudioOutput.h">
       <Filter>Engine</Filter>
     </ClInclude>

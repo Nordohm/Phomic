@@ -534,7 +534,15 @@
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
-                            <TextBlock VerticalAlignment="Center" Text="Noise suppression" />
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="Noise suppression" />
+                                <TextBlock
+                                    x:Name="NoiseSuppressionText"
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                    Style="{StaticResource CaptionTextBlockStyle}"
+                                    Text="Adds 40 ms of delay and uses more CPU."
+                                    TextWrapping="Wrap" />
+                            </StackPanel>
                             <ToggleSwitch
                                 x:Name="NoiseSuppressionToggle"
                                 Grid.Column="1"

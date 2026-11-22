@@ -165,6 +165,11 @@ namespace winrt::Phomic::implementation
     MainWindow::~MainWindow()
     {
         Shutdown();
+        if (m_denoiserLoader.joinable())
+        {
+            m_denoiserLoader.join();
+        }
+        delete m_denoiser.exchange(nullptr);
         m_tray.reset();
         if (m_trayIcon)
         {
@@ -231,7 +236,10 @@ namespace winrt::Phomic::implementation
         m_autoGain = std::make_unique<phomic::AutoGain>(static_cast<float>(autoStartDb));
         m_appliedGainDb = static_cast<float>(autoStartDb);
         m_noiseSuppressionOn = settings::GetInt(settings::kNoiseSuppression, 0) != 0;
-        m_denoiser = std::make_unique<phomic::Denoiser>();
+        if (m_noiseSuppressionOn)
+        {
+            LoadDenoiser();
+        }
         const bool bluetoothEnabled = settings::GetInt(settings::kBluetooth, 1) != 0;
         m_wifiEnabled = settings::GetInt(settings::kWiFi, 1) != 0;
         const bool usbEnabled = settings::GetInt(settings::kUsb, 1) != 0;
@@ -245,16 +253,17 @@ namespace winrt::Phomic::implementation
         {
             m_jitter->Read(out, frames);
             // Noise suppression first, so automatic gain measures what's left of the background.
-            // Switched on, it starts afresh (and adds its 10 ms from then on).
-            const bool denoise = m_noiseSuppressionOn.load(std::memory_order_relaxed);
+            // Switched on, it starts afresh (and delays the sound by 30-40 ms from then on).
+            phomic::Denoiser* denoiser = m_denoiser.load(std::memory_order_acquire);
+            const bool denoise = denoiser && m_noiseSuppressionOn.load(std::memory_order_relaxed);
             if (denoise && !m_denoising)
             {
-                m_denoiser->Reset();
+                denoiser->Reset();
             }
             m_denoising = denoise;
             if (denoise)
             {
-                m_denoiser->Process(out, frames);
+                denoiser->Process(out, frames);
             }
             if (m_autoGainOn.load(std::memory_order_relaxed))
             {
@@ -1948,6 +1957,36 @@ namespace winrt::Phomic::implementation
         }
         m_noiseSuppressionOn = NoiseSuppressionToggle().IsOn();
         phomic::settings::SetInt(phomic::settings::kNoiseSuppression, m_noiseSuppressionOn ? 1 : 0);
+        if (m_noiseSuppressionOn)
+        {
+            LoadDenoiser();
+        }
+    }
+
+    // The model takes some 300 ms to load: on a thread of its own, once. If it can't be loaded (it's
+    // built into Phomic.exe, so that shouldn't happen), the caption under the switch says so.
+    void MainWindow::LoadDenoiser()
+    {
+        if (m_denoiserLoader.joinable())
+        {
+            return;
+        }
+        m_denoiserLoader = std::thread([this, weak = get_weak(), queue = DispatcherQueue()]
+        {
+            auto denoiser = std::make_unique<phomic::Denoiser>();
+            if (denoiser->IsReady())
+            {
+                m_denoiser.store(denoiser.release(), std::memory_order_release);
+                return;
+            }
+            queue.TryEnqueue([weak]
+            {
+                if (auto self = weak.get())
+                {
+                    self->NoiseSuppressionText().Text(L"Couldn't load noise suppression.");
+                }
+            });
+        });
     }
 
     // Automatic gain on: where it is now (while live). Off: the slider to set it by hand.

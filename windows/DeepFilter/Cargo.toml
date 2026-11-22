@@ -1,0 +1,29 @@
+# Phomic's noise suppression: DeepFilterNet (third_party/deepfilternet) with its model built in, behind a
+# small C interface (src/lib.rs, Phomic/DeepFilter.h). Built as a static library and linked into
+# Phomic.exe; Phomic.vcxproj runs cargo before it links. See docs/development.md.
+[package]
+name = "phomic_deepfilter"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+publish = false
+
+[lib]
+crate-type = ["staticlib"]
+path = "src/lib.rs"
+
+[dependencies]
+deep_filter = { path = "../third_party/deepfilternet/libDF", default-features = false, features = ["tract", "default-model"] }
+ndarray = "^0.15"
+
+# Always optimized, also for Phomic's Debug builds: the model has to keep up with the audio.
+[profile.dev]
+opt-level = 3
+debug = false
+incremental = false
+
+[profile.release]
+opt-level = 3
+debug = false
+lto = "thin"
+codegen-units = 1

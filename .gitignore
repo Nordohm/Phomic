@@ -11,6 +11,8 @@ x86/
 ARM64/
 [Oo]bj/
 [Bb]in/
+# DeepFilterNet's Rust sources have a bin/ folder too (Cargo.toml needs it); the build goes to x64/.
+!windows/third_party/deepfilternet/libDF/src/bin/
 Generated Files/
 AppPackages/
 BundleArtifacts/

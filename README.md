@@ -52,8 +52,8 @@ Building the apps and how they work: [docs/development.md](docs/development.md).
 
 ## License
 
-[MIT](LICENSE), without any warranty. Phomic contains libopus and, on Windows, Microsoft's Windows App SDK under
-their own terms ([details](windows/third_party/README.md)).
+[MIT](LICENSE), without any warranty. Phomic contains libopus and, on Windows, DeepFilterNet and Microsoft's Windows
+App SDK under their own terms ([details](windows/third_party/README.md)).
 
 Phomic isn't made, sponsored or endorsed by Apple, Microsoft, VB-Audio or the Bluetooth SIG. Apple, iPhone, App Store
 and Apple Devices are trademarks of Apple Inc. Windows is a trademark of Microsoft Corporation. Bluetooth is a
