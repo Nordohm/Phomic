@@ -268,7 +268,10 @@ iOS asks for **Microphone**, **Local Network** (Wi-Fi) and **Bluetooth** (only w
   *Get Phomic for PC*, opens nordohm.com/Phomic (`GetPCAppCard`).
 - **Errors** ("Another connection took over on the PC.") come down like a notification, just under the top bar so
   the gear stays free, on every tab and the live screen (`ErrorBanner`, fed by `MicController.lastError`). Swipe
-  one up or close it; the next attempt to connect clears it too.
+  one up or close it; the next attempt to connect clears it too. Two things that went wrong in the background
+  don't show: when iOS won't start the audio there, the session carries on and the audio starts again once
+  Phomic is on screen; and when Bonjour drops the search for PCs (DefunctConnection), it starts over, with an
+  error only after three tries in a row.
 - **Feedback:** *Give Feedback* in *Settings* opens a new issue on GitHub with the feedback form
   (`.github/ISSUE_TEMPLATE/feedback.yml`), the app's version and the iPhone's iOS version and model filled in.
 - **Version:** at the bottom of *Settings*, read from the app's Info.plist, so it's always the installed one

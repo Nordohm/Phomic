@@ -175,6 +175,8 @@ final class MicController {
     /// session keeps it running.
     @ObservationIgnored private var appActive = UIApplication.shared.applicationState != .background
     @ObservationIgnored private var batteryState = UIDevice.BatteryState.unknown
+    /// The audio couldn't be started in the background: start it once the app is on screen.
+    @ObservationIgnored private var retryAudioWhenActive = false
     /// Set while a switch the PC asked for is under way (see switchForPC).
     @ObservationIgnored private var pcAskedToSwitch = false
     @ObservationIgnored private let liveActivity = LiveActivityController()
@@ -480,6 +482,11 @@ final class MicController {
                 // e.g. unmuting from the Live Activity, and iOS said no: stay connected, muted.
                 lastError = "Couldn't turn the microphone on (error \(code)). Unmute here instead."
                 isMuted = true // didSet starts the silent keep-alive
+            } else if UIApplication.shared.applicationState != .active {
+                // In the background iOS can refuse to start audio again (error 561015905, '!pla',
+                // 22 Nov 2026: it ended the session with this error on screen). Keep the session
+                // and try again once Phomic is on screen.
+                retryAudioWhenActive = true
             } else {
                 let message = "Couldn't start the microphone: \(error.localizedDescription) (error \(code))"
                 stopAll()
@@ -741,6 +748,7 @@ final class MicController {
         usbListener.stop()
         usbClient.disconnect()
         capture.set(.stopped)
+        retryAudioWhenActive = false
         phase = .idle
         level = 0
         roundTripMs = nil
@@ -904,7 +912,14 @@ final class MicController {
         // A Live Activity can only be started from the foreground: retry when we're back.
         observers.append(center.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated {
-                self?.refreshLiveActivity()
+                guard let self else { return }
+                self.refreshLiveActivity()
+                if self.retryAudioWhenActive {
+                    self.retryAudioWhenActive = false
+                    if self.isActive {
+                        self.applyAudioState(restart: true)
+                    }
+                }
             }
         })
         // Swiped away in the app switcher (Phomic runs in the background during a session, so

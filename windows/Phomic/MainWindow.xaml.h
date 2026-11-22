@@ -184,6 +184,7 @@ namespace winrt::Phomic::implementation
         std::atomic<bool> m_autoGainOn{ true };
         std::atomic<float> m_appliedGainDb{ 0.f }; // automatic gain's current gain, for the UI
         std::atomic<bool> m_noiseSuppressionOn{ false };
+        std::atomic<float> m_outputPeak{ 0.f }; // for the level meter: raised by the audio thread, taken by the UI
         // Noise suppression's model, loaded on a thread of its own the first time noise suppression is
         // on (it takes a moment); until it's there the sound goes through as it is. Freed in the
         // destructor, once the audio has stopped.

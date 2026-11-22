@@ -99,62 +99,13 @@ private struct ConnectionScreen: View {
 
     var body: some View {
         NavigationStack {
-            // The live screen is centered around the mute button. The top bar (with the status
-            // bar) is taller than the tab bar, so centering between the two would sit a little
-            // low; instead the content keeps the same margin, the larger of the two, top and
-            // bottom. Choosing a PC starts at the same height on every tab instead (a long list
-            // of PCs scrolls).
-            GeometryReader { screen in
-                let margin = max(screen.safeAreaInsets.top, screen.safeAreaInsets.bottom)
-                let height = max(0, screen.size.height - 2 * margin)
-                ZStack(alignment: .top) {
-                    ScrollView {
-                        VStack(spacing: 24) {
-                            Group {
-                                if model.isActive {
-                                    LiveView()
-                                        .frame(height: max(0, height - Self.verticalPadding))
-                                } else {
-                                    if let version = updates.available {
-                                        UpdateCard(version: version)
-                                            .transition(.opacity)
-                                    }
-                                    switch transport {
-                                    case .wifi:
-                                        WiFiComputers()
-                                    case .bluetooth:
-                                        BluetoothComputers()
-                                    case .usb:
-                                        UsbWaiting()
-                                    }
-                                }
-                            }
-                            .transition(.opacity)
-                        }
-                        .padding(.horizontal, 20)
-                        .padding(.top, model.isActive ? 0 : (height * Self.headingAt).rounded())
-                        .padding(.vertical, Self.verticalPadding / 2)
-                        .frame(minHeight: height, alignment: model.isActive ? .center : .top)
-                        .padding(.vertical, margin)
-                        .animation(.snappy, value: model.isActive)
-                        .animation(.snappy, value: updates.available)
-                    }
-                    // Under the top bar, so Settings stays in reach.
-                    ErrorBanner()
-                        .padding(.top, screen.safeAreaInsets.top + 4)
-                }
+            // The error banner sits under the top bar, so Settings stays in reach: the ZStack keeps
+            // to the safe area (status bar and top bar), which the page inside it ignores.
+            ZStack(alignment: .top) {
+                page
+                ErrorBanner()
+                    .padding(.top, 4)
             }
-            // The whole screen, so `screen` knows the bars; the margins above keep content clear
-            // of them (and long lists scroll on under the glass).
-            .ignoresSafeArea(.container, edges: .vertical)
-            // Scroll only when there's more than fits, e.g. a long list of PCs.
-            .scrollBounceBehavior(.basedOnSize)
-            .backgroundPreferenceValue(MicButtonKey.self) { button in
-                if let button, model.isActive {
-                    VoiceGlow(button: button, isLive: isStreaming && !model.isMuted, isMuted: isStreaming && model.isMuted)
-                }
-            }
-            .background(Color(.systemGroupedBackground))
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
@@ -166,6 +117,60 @@ private struct ConnectionScreen: View {
                 }
             }
         }
+    }
+
+    private var page: some View {
+        // The live screen is centered around the mute button. The top bar (with the status
+        // bar) is taller than the tab bar, so centering between the two would sit a little
+        // low; instead the content keeps the same margin, the larger of the two, top and
+        // bottom. Choosing a PC starts at the same height on every tab instead (a long list
+        // of PCs scrolls).
+        GeometryReader { screen in
+            let margin = max(screen.safeAreaInsets.top, screen.safeAreaInsets.bottom)
+            let height = max(0, screen.size.height - 2 * margin)
+            ScrollView {
+                VStack(spacing: 24) {
+                    Group {
+                        if model.isActive {
+                            LiveView()
+                                .frame(height: max(0, height - Self.verticalPadding))
+                        } else {
+                            if let version = updates.available {
+                                UpdateCard(version: version)
+                                    .transition(.opacity)
+                            }
+                            switch transport {
+                            case .wifi:
+                                WiFiComputers()
+                            case .bluetooth:
+                                BluetoothComputers()
+                            case .usb:
+                                UsbWaiting()
+                            }
+                        }
+                    }
+                    .transition(.opacity)
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, model.isActive ? 0 : (height * Self.headingAt).rounded())
+                .padding(.vertical, Self.verticalPadding / 2)
+                .frame(minHeight: height, alignment: model.isActive ? .center : .top)
+                .padding(.vertical, margin)
+                .animation(.snappy, value: model.isActive)
+                .animation(.snappy, value: updates.available)
+            }
+        }
+        // The whole screen, so `screen` knows the bars; the margins above keep content clear
+        // of them (and long lists scroll on under the glass).
+        .ignoresSafeArea(.container, edges: .vertical)
+        // Scroll only when there's more than fits, e.g. a long list of PCs.
+        .scrollBounceBehavior(.basedOnSize)
+        .backgroundPreferenceValue(MicButtonKey.self) { button in
+            if let button, model.isActive {
+                VoiceGlow(button: button, isLive: isStreaming && !model.isMuted, isMuted: isStreaming && model.isMuted)
+            }
+        }
+        .background(Color(.systemGroupedBackground))
     }
 }
 

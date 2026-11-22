@@ -18,6 +18,8 @@ final class ServerBrowser: @unchecked Sendable {
 
     private let queue = DispatchQueue(label: "phomic.browser")
     private var browser: NWBrowser?
+    /// Times in a row the search broke down without getting going again.
+    private var failures = 0
 
     func start() {
         queue.async { self.startBrowsing() }
@@ -31,18 +33,26 @@ final class ServerBrowser: @unchecked Sendable {
         browser.browseResultsChangedHandler = { [weak self] results, _ in
             self?.publish(results)
         }
-        browser.stateUpdateHandler = { [weak self] state in
-            guard let self else { return }
+        browser.stateUpdateHandler = { [weak self, weak browser] state in
+            guard let self, let browser, browser === self.browser else { return }
             switch state {
             case .ready:
+                self.failures = 0
                 self.onProblem?(nil)
-            case .waiting(let error):
+            case .waiting(let error) where Self.isDenied(error):
+                // It goes on by itself once Local Network access is allowed.
                 self.onProblem?(Self.describe(error))
-            case .failed(let error):
-                self.onProblem?(Self.describe(error))
-                self.browser?.cancel()
+            case .waiting(let error), .failed(let error):
+                // E.g. DefunctConnection: Bonjour let go of Phomic while it was in the background,
+                // and the search doesn't recover by itself. Start over; say so only when that
+                // keeps failing.
+                self.failures += 1
+                if self.failures >= 3 {
+                    self.onProblem?(Self.describe(error))
+                }
+                browser.cancel()
                 self.browser = nil
-                self.queue.asyncAfter(deadline: .now() + 3) { self.startBrowsing() }
+                self.queue.asyncAfter(deadline: .now() + (self.failures == 1 ? 0 : 3)) { self.startBrowsing() }
             default:
                 break
             }
@@ -89,10 +99,22 @@ final class ServerBrowser: @unchecked Sendable {
         return (numbered ? 1000 : 0) + server.name.count
     }
 
+    private static func isDenied(_ error: NWError) -> Bool {
+        if case .dns(let code) = error, code == -65570 { return true } // kDNSServiceErr_PolicyDenied
+        return false
+    }
+
     private static func describe(_ error: NWError) -> String {
-        if case .dns(let code) = error, code == -65570 { // kDNSServiceErr_PolicyDenied
+        if isDenied(error) {
             return "Phomic can't see your network. Allow Local Network access in Settings › Privacy & Security › Local Network."
         }
-        return "Searching for PCs failed: \(error.localizedDescription)"
+        let code: Int
+        switch error {
+        case .dns(let value): code = Int(value)
+        case .posix(let value): code = Int(value.rawValue)
+        case .tls(let value): code = Int(value)
+        @unknown default: code = 0
+        }
+        return "Can't search for PCs (error \(code))."
     }
 }

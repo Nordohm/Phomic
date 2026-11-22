@@ -265,16 +265,29 @@ namespace winrt::Phomic::implementation
             {
                 denoiser->Process(out, frames);
             }
+            float limiterGain = 1.f;
             if (m_autoGainOn.load(std::memory_order_relaxed))
             {
                 m_autoGain->Process(out, frames);
                 m_appliedGainDb.store(m_autoGain->GainDb(), std::memory_order_relaxed);
-                m_limiter.Process(out, frames, 1.f);
             }
             else
             {
-                m_limiter.Process(out, frames, m_gain.load(std::memory_order_relaxed));
+                limiterGain = m_gain.load(std::memory_order_relaxed);
             }
+            // The level meter shows what goes out: without the noise, with the gain, and before the
+            // limiter, so it can say when the limiter works.
+            float peak = 0.f;
+            for (uint32_t i = 0; i < frames; ++i)
+            {
+                peak = std::max(peak, std::fabs(out[i]));
+            }
+            peak *= limiterGain;
+            if (peak > m_outputPeak.load(std::memory_order_relaxed))
+            {
+                m_outputPeak.store(peak, std::memory_order_relaxed);
+            }
+            m_limiter.Process(out, frames, limiterGain);
         };
         m_output = std::make_unique<phomic::AudioOutput>(source);
         m_cableOutput = std::make_unique<phomic::CableOutput>(source);
@@ -1339,14 +1352,15 @@ namespace winrt::Phomic::implementation
         const auto usb = m_usb->GetStatus();
         const bool live = wifi.connected || bluetooth.connected || usb.connected;
 
-        // Level meter: post-gain peak in dBFS (the limiter keeps it under its ceiling), fast
-        // attack, slow release. "Clipping": the iPhone's own input is at full scale.
+        // Level meter: the peak of what goes out, in dBFS (the limiter keeps it under its ceiling),
+        // fast attack, slow release. "Clipping": the iPhone's own input is at full scale.
         float received = std::max({ m_server->TakePeak(), m_bluetooth->TakePeak(), m_usb->TakePeak() });
+        float gained = m_outputPeak.exchange(0.f);
         if (!live)
         {
             received = 0.f;
+            gained = 0.f;
         }
-        const float gained = received * (m_autoGainOn ? DbToGain(m_appliedGainDb.load()) : m_gain.load());
         const float peak = std::min(gained, phomic::Limiter::kCeiling);
         const float db = peak > 1e-5f ? 20.f * std::log10(peak) : -100.f;
         const float target = std::clamp((db + 60.f) / 60.f, 0.f, 1.f);
